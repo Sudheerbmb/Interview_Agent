@@ -14,7 +14,7 @@ An intelligent conversational AI agent that helps users prepare for job intervie
 
 ### Multi-Agent System Design
 
-The system employs a **three-agent architecture** that works in parallel to create intelligent, adaptive interview experiences:
+The system employs a **four-agent architecture** that works in parallel to create intelligent, adaptive interview experiences:
 
 ```
 ┌─────────────┐
@@ -22,21 +22,27 @@ The system employs a **three-agent architecture** that works in parallel to crea
 └──────┬──────┘
        │
        ▼
-┌─────────────────────────────────────┐
-│         Flask Backend (app.py)       │
-│                                       │
-│  ┌──────────┐  ┌──────────┐          │
-│  │ Profiler │  │  Grader  │          │
-│  │  Agent   │  │  Agent   │          │
-│  └────┬─────┘  └────┬─────┘          │
-│       │             │                 │
-│       └──────┬──────┘                 │
-│              ▼                        │
-│       ┌──────────────┐               │
-│       │ Interviewer  │               │
-│       │    Agent     │               │
-│       └──────┬───────┘               │
-└──────────────┼───────────────────────┘
+┌─────────────────────────────────────────────┐
+│         Flask Backend (app.py)              │
+│                                              │
+│  ┌──────────┐  ┌──────────┐                 │
+│  │ Profiler │  │  Grader  │                 │
+│  │  Agent   │  │  Agent   │                 │
+│  └────┬─────┘  └────┬─────┘                 │
+│       │             │                        │
+│       └──────┬──────┘                        │
+│              ▼                               │
+│       ┌──────────────┐                      │
+│       │ Interviewer  │                      │
+│       │    Agent     │                      │
+│       └──────┬───────┘                      │
+│              │                              │
+│              ▼                              │
+│       ┌──────────────────┐                  │
+│       │ Feedback        │                  │
+│       │ Generator Agent │                  │
+│       └──────────────────┘                  │
+└──────────────┬──────────────────────────────┘
                │
                ▼
         ┌─────────────┐
@@ -48,24 +54,32 @@ The system employs a **three-agent architecture** that works in parallel to crea
 ### Agent Responsibilities
 
 1. **ProfilerAgent** (`agents/profiler.py`)
-   - **Purpose**: Behavioral analysis and persona detection
-   - **Detects**: Confused, Efficient, Chatty, Edge Case, Normal, or Silent users
-   - **Output**: Persona classification, relevance flag, sentiment analysis
-   - **Model**: Groq GPT-OSS-20B with JSON response format
+   - **Purpose**: Advanced behavioral analysis and persona detection
+   - **Detects**: Confused, Efficient, Chatty, Edge Case, Normal, Silent, Anxious, or Overconfident users
+   - **Output**: Comprehensive persona classification, relevance, sentiment, confidence level, communication quality, engagement metrics
+   - **Features**: Context-aware analysis, risk factor detection, positive indicator identification
+   - **Model**: Groq Llama-3.3-70B-Versatile with JSON response format
 
 2. **GraderAgent** (`agents/grader.py`)
-   - **Purpose**: Real-time answer evaluation
-   - **Evaluates**: Answer quality (0-100 score), correctness, depth
-   - **Decides**: Whether follow-up questions are needed
-   - **Output**: Score, requires_followup flag, internal feedback
-   - **Model**: Groq GPT-OSS-20B with JSON response format
+   - **Purpose**: Multi-dimensional answer evaluation
+   - **Evaluates**: Technical accuracy, communication quality, relevance, depth level
+   - **Features**: Trend analysis, adaptive scoring, follow-up suggestions, strength/improvement identification
+   - **Output**: Comprehensive score breakdown, requires_followup flag, detailed feedback, actionable insights
+   - **Model**: Groq Llama-3.3-70B-Versatile with JSON response format
 
 3. **InterviewerAgent** (`agents/interviewer.py`)
-   - **Purpose**: Natural conversation orchestration
-   - **Synthesizes**: Profiler and Grader insights into contextual responses
-   - **Adapts**: Behavior based on detected persona
-   - **Manages**: Interview phases (Introduction, Technical, Behavioral, Feedback)
-   - **Model**: Groq GPT-OSS-20B with higher temperature for natural conversation
+   - **Purpose**: Intelligent conversation orchestration with adaptive questioning
+   - **Synthesizes**: Profiler and Grader insights into contextual, natural responses
+   - **Adapts**: Behavior based on detected persona with sophisticated strategies
+   - **Manages**: Interview phases (Introduction → Technical → Behavioral → Deep Dive → Feedback)
+   - **Features**: Phase-specific question generation, adaptive difficulty, Socratic questioning, comprehensive feedback generation
+   - **Model**: Groq Llama-3.3-70B-Versatile with higher temperature for natural conversation
+
+4. **FeedbackGeneratorAgent** (`agents/feedback_generator.py`) **[NEW]**
+   - **Purpose**: Comprehensive post-interview feedback generation
+   - **Generates**: Executive summary, performance breakdown, STAR analysis, technical competency map, actionable recommendations
+   - **Features**: Score analytics, trend analysis, role fit assessment, learning path recommendations
+   - **Model**: Groq Llama-3.3-70B-Versatile
 
 ### Design Decisions
 
@@ -148,9 +162,10 @@ The system employs a **three-agent architecture** that works in parallel to crea
 ag/
 ├── agents/
 │   ├── __init__.py
-│   ├── profiler.py      # Persona detection agent
-│   ├── grader.py        # Answer evaluation agent
-│   └── interviewer.py   # Main conversation agent
+│   ├── profiler.py           # Advanced persona detection agent
+│   ├── grader.py             # Multi-dimensional evaluation agent
+│   ├── interviewer.py        # Intelligent conversation agent
+│   └── feedback_generator.py # Comprehensive feedback agent
 ├── templates/
 │   └── index.html       # Frontend UI (chat + voice)
 ├── app.py               # Flask backend & routing
@@ -191,15 +206,65 @@ The system is designed to handle multiple user personas as required by the assig
 ## 🔄 Interview Flow
 
 1. **Setup Phase**: User uploads resume and job description
-2. **Introduction**: Agent introduces itself and role
-3. **Technical Questions**: Role-specific technical questions based on JD
-4. **Behavioral Questions**: STAR-method questions about past experiences
-5. **Follow-ups**: Dynamic follow-ups based on answer quality
-6. **Feedback Phase**: Post-interview feedback with:
-   - Overall outcome assessment
-   - STAR analysis of responses
+2. **Introduction**: Agent introduces itself and role, sets expectations
+3. **Technical Phase (Questions 2-5)**: 
+   - Role-specific technical questions based on JD
+   - Adaptive difficulty based on performance
+   - Progressive complexity (fundamentals → intermediate → advanced)
+4. **Behavioral Phase (Questions 6-8)**: 
+   - STAR-method questions about past experiences
+   - Focus on problem-solving, leadership, conflict resolution
+5. **Deep Dive Phase (Questions 9+)**: 
+   - System design / Architecture questions
+   - Scenario-based problem solving
+   - Trade-off analysis
+6. **Feedback Phase**: Comprehensive post-interview feedback with:
+   - Executive summary and overall assessment
+   - Performance breakdown (technical, communication, behavioral)
+   - STAR analysis with improvement suggestions
+   - Technical competency map
    - Knowledge gaps identification
-   - Actionable improvement tips
+   - Actionable improvement tips and learning paths
+   - Role fit assessment and readiness timeline
+
+## 🚀 Advanced Features
+
+### Interview State Management
+- **Phase Tracking**: Automatic progression through interview phases
+- **Question Counting**: Tracks total questions asked
+- **Score History**: Maintains all scores for trend analysis
+- **Interview History**: Complete conversation log for feedback generation
+
+### Real-Time Analytics
+- **Performance Metrics**: Average, highest, lowest scores
+- **Trend Analysis**: Improving, stable, or declining performance
+- **Score Distribution**: Breakdown by performance tiers
+- **Phase-Specific Insights**: Performance by interview phase
+
+### Enhanced Persona Detection
+- **7 Persona Types**: Normal, Confused, Efficient, Chatty, Edge Case, Anxious, Overconfident
+- **Multi-Dimensional Analysis**: Sentiment, confidence, communication quality, engagement level
+- **Risk Factor Detection**: Identifies potential interview issues
+- **Positive Indicator Tracking**: Highlights candidate strengths
+
+### Comprehensive Evaluation
+- **Multi-Dimensional Scoring**: Technical accuracy, communication quality, relevance
+- **Depth Assessment**: Surface, intermediate, advanced, or expert level
+- **Follow-up Intelligence**: Suggests specific follow-up questions
+- **Strength/Improvement Identification**: Detailed breakdown of what worked and what didn't
+
+### Feedback Generation
+- **Automatic Trigger**: Detects interview end phrases or after 12+ questions
+- **Manual Trigger**: `/get-feedback` endpoint for on-demand feedback
+- **Comprehensive Reports**: Executive summary, detailed analysis, actionable recommendations
+- **Role Fit Assessment**: Strong fit / Good fit / Needs development with timeline
+
+### API Endpoints
+
+- `POST /upload-context`: Upload resume and job description
+- `POST /chat`: Main conversation endpoint with enhanced analytics
+- `POST /get-feedback`: Generate feedback report on demand
+- `POST /reset`: Reset interview session
 
 ## 🛠️ Technical Stack
 
