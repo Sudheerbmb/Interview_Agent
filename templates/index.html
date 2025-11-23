@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 
 <html lang="en">
 
@@ -664,4 +664,1322 @@
 
 </body>
 
+</html> -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insight | Intelligent Interview Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; }
+        html, body { 
+            height: 100%; 
+            margin: 0; 
+            padding: 0; 
+            overflow: hidden;
+        }
+        body { 
+            background-color: #0f1115; 
+            color: #e5e7eb; 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; 
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Glassmorphism */
+        .glass-panel { 
+            background: rgba(30, 41, 59, 0.7); 
+            backdrop-filter: blur(10px); 
+            border: 1px solid rgba(255,255,255,0.1); 
+        }
+        .brain-panel { 
+            border-left: 3px solid #a855f7; 
+            background: #18181b; 
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1f2937; }
+        ::-webkit-scrollbar-thumb { 
+            background: #4b5563; 
+            border-radius: 4px; 
+        }
+        ::-webkit-scrollbar-thumb:hover { 
+            background: #6b7280; 
+        }
+
+        /* Animation */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
+        
+        /* Typing indicator dots */
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 
+            0%, 80%, 100% { transform: scale(0); } 
+            40% { transform: scale(1); } 
+        }
+
+        /* Smooth transitions for input box */
+        #chat-container {
+            scroll-padding-bottom: 1rem;
+        }
+
+        /* Enhanced input focus effects */
+        #user-input:focus {
+            box-shadow: 0 0 0 3px rgba(147, 51, 234, 0.1);
+        }
+
+        /* Analytics Modal */
+        #analytics-modal {
+            backdrop-filter: blur(4px);
+        }
+        .analytics-card {
+            background: rgba(30, 41, 59, 0.9);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .score-bar {
+            height: 8px;
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        
+        /* Feedback formatting */
+        .feedback-content h1, .feedback-content h2, .feedback-content h3 {
+            color: #e5e7eb;
+            margin-top: 1.5rem;
+            margin-bottom: 0.75rem;
+            font-weight: bold;
+        }
+        .feedback-content h1 { font-size: 1.5rem; border-bottom: 2px solid #4b5563; padding-bottom: 0.5rem; }
+        .feedback-content h2 { font-size: 1.25rem; color: #a855f7; }
+        .feedback-content h3 { font-size: 1.1rem; }
+        .feedback-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background: rgba(17, 24, 39, 0.5);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .feedback-content table th, .feedback-content table td {
+            border: 1px solid #4b5563;
+            padding: 0.75rem 1rem;
+            text-align: left;
+            vertical-align: top;
+        }
+        .feedback-content table th {
+            background: rgba(147, 51, 234, 0.3);
+            color: #c084fc;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.875rem;
+            letter-spacing: 0.05em;
+        }
+        .feedback-content table tbody tr {
+            transition: background 0.2s;
+        }
+        .feedback-content table tbody tr:nth-child(even) {
+            background: rgba(31, 41, 55, 0.3);
+        }
+        .feedback-content table tbody tr:hover {
+            background: rgba(147, 51, 234, 0.1);
+        }
+        .feedback-content table td {
+            color: #e5e7eb;
+        }
+        .feedback-content ul, .feedback-content ol {
+            margin: 0.75rem 0;
+            padding-left: 1.5rem;
+        }
+        .feedback-content li {
+            margin: 0.5rem 0;
+            line-height: 1.6;
+        }
+        .feedback-content strong {
+            color: #a855f7;
+            font-weight: 600;
+        }
+        .feedback-content p {
+            margin: 0.75rem 0;
+            line-height: 1.7;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col font-sans overflow-hidden bg-[#0f1115]">
+
+    <nav class="border-b border-gray-800 p-4 flex justify-between items-center bg-[#0f1115] z-10 flex-shrink-0">
+        <div class="flex items-center gap-2">
+            <div class="bg-purple-600 p-2 rounded-lg"><i class="fa-solid fa-brain text-white"></i></div>
+            <h1 class="text-xl font-bold tracking-tight">Insight <span class="text-gray-500 font-normal">| Interview Agent</span></h1>
+        </div>
+        <div class="flex items-center gap-3">
+            <div id="phase-badge" class="hidden px-3 py-1 rounded-full text-xs font-bold bg-green-900 text-green-400 uppercase flex items-center gap-2">
+                <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> Live Session
+            </div>
+            <div id="nav-actions" class="hidden flex items-center gap-2">
+                <button onclick="showSessionHistory()" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition text-gray-300 hover:text-white" title="Session History (H)">
+                    <i class="fa-solid fa-history mr-1"></i> History
+                </button>
+                <button onclick="showSettings()" class="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 rounded-lg transition text-gray-300 hover:text-white" title="Settings (S)">
+                    <i class="fa-solid fa-gear mr-1"></i> Settings
+                </button>
+                <button onclick="saveCurrentSession()" class="px-3 py-1.5 text-xs bg-purple-600 hover:bg-purple-500 rounded-lg transition text-white" title="Save Session (Ctrl+S)">
+                    <i class="fa-solid fa-save mr-1"></i> Save
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div id="setup-screen" class="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
+        <div class="w-full max-w-xl glass-panel p-8 rounded-2xl shadow-2xl animate-fade-in-up">
+            <h2 class="text-2xl font-bold mb-2">Configure Session</h2>
+            <p class="text-gray-400 mb-6 text-sm">Upload candidate profile (PDF) and target role to initialize the Multi-Agent System.</p>
+
+            <form id="upload-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-gray-300">Interview Role <span class="text-purple-400">*</span></label>
+                    <select id="role-select" name="role" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-purple-500 transition text-gray-100" required>
+                        <option value="">Select Interview Role...</option>
+                        <option value="software_engineer">Software Engineer</option>
+                        <option value="data_scientist">Data Scientist</option>
+                        <option value="product_manager">Product Manager</option>
+                        <option value="sales_engineer">Sales Engineer</option>
+                        <option value="devops_engineer">DevOps Engineer</option>
+                        <option value="data_engineer">Data Engineer</option>
+                        <option value="frontend_engineer">Frontend Engineer</option>
+                        <option value="backend_engineer">Backend Engineer</option>
+                        <option value="qa_engineer">QA Engineer</option>
+                        <option value="security_engineer">Security Engineer</option>
+                        <option value="ml_engineer">ML Engineer</option>
+                        <option value="cloud_architect">Cloud Architect</option>
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Choose the role you're interviewing for</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-gray-300">Resume (PDF)</label>
+                    <div class="relative border-2 border-dashed border-gray-700 rounded-lg p-6 hover:border-purple-500 transition text-center cursor-pointer group" onclick="document.getElementById('resume-file').click()">
+                        <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-500 mb-2 group-hover:text-purple-400 transition"></i>
+                        <p class="text-xs text-gray-400">Click to upload PDF</p>
+                        <input type="file" id="resume-file" accept=".pdf" class="hidden" required onchange="document.querySelector('#file-name').innerText = this.files[0].name">
+                    </div>
+                    <p id="file-name" class="text-xs text-purple-400 mt-2 h-4"></p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-1 text-gray-300">Job Description</label>
+                    <textarea id="jd-text" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-purple-500 transition placeholder-gray-500" placeholder="Paste the Job Description here..." required></textarea>
+                </div>
+
+                <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition shadow-[0_0_15px_rgba(147,51,234,0.3)] hover:shadow-[0_0_20px_rgba(147,51,234,0.5)]">
+                    <i class="fa-solid fa-rocket mr-2"></i> Start Interview
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="chat-screen" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full min-h-0 relative">
+        
+        <!-- Analytics Dashboard -->
+        <div id="analytics-panel" class="hidden bg-gray-900/50 border-b border-gray-800 p-3 flex items-center justify-between text-xs flex-shrink-0">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400">Questions:</span>
+                    <span id="question-count" class="text-purple-400 font-bold">0</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400">Avg Score:</span>
+                    <span id="avg-score" class="text-green-400 font-bold">--</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-gray-400">Phase:</span>
+                    <span id="current-phase" class="text-blue-400 font-bold">Introduction</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-clock text-gray-400"></i>
+                    <span class="text-gray-400">Time:</span>
+                    <span id="interview-time" class="text-cyan-400 font-bold">00:00</span>
+                </div>
+                <div id="edge-case-indicator" class="hidden flex items-center gap-2">
+                    <i class="fa-solid fa-exclamation-triangle text-yellow-400"></i>
+                    <span class="text-yellow-400 font-bold">Edge Case Detected</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="showLearningResources()" class="text-purple-400 hover:text-purple-300 transition text-xs" title="Learning Resources (L)">
+                    <i class="fa-solid fa-book"></i> Resources
+                </button>
+                <button onclick="exportFeedback()" class="text-purple-400 hover:text-purple-300 transition text-xs" title="Export Feedback (E)">
+                    <i class="fa-solid fa-download"></i> Export
+                </button>
+                <button onclick="exportPDF()" class="text-purple-400 hover:text-purple-300 transition text-xs" title="Export PDF (P)">
+                    <i class="fa-solid fa-file-pdf"></i> PDF
+                </button>
+                <button onclick="toggleAnalytics()" class="text-purple-400 hover:text-purple-300 transition text-xs" title="Analytics (A)">
+                    <i class="fa-solid fa-chart-line"></i> Analytics
+                </button>
+            </div>
+        </div>
+        
+        <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth pb-6 min-h-0" style="scroll-behavior: smooth;">
+            </div>
+
+        <!-- Analytics Modal -->
+        <div id="analytics-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div class="analytics-card rounded-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-purple-400"><i class="fa-solid fa-chart-line mr-2"></i>Detailed Analytics</h2>
+                    <button onclick="toggleAnalytics()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                <div id="analytics-content" class="space-y-6">
+                    <!-- Analytics content will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Session History Modal -->
+        <div id="session-history-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div class="analytics-card rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-purple-400"><i class="fa-solid fa-history mr-2"></i>Session History</h2>
+                    <button onclick="showSessionHistory()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                <div id="session-history-content" class="space-y-3">
+                    <p class="text-gray-400 text-center py-8">Loading sessions...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div class="analytics-card rounded-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-purple-400"><i class="fa-solid fa-gear mr-2"></i>Interview Settings</h2>
+                    <button onclick="showSettings()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                <div id="settings-content" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-gray-300">Interview Difficulty</label>
+                        <select id="difficulty-setting" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-gray-100">
+                            <option value="adaptive">Adaptive (Recommended)</option>
+                            <option value="beginner">Beginner</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                            <option value="expert">Expert</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-gray-300">Interview Duration (minutes)</label>
+                        <input type="number" id="duration-setting" min="10" max="120" value="45" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-gray-100">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-gray-300">Focus Areas (comma-separated)</label>
+                        <input type="text" id="focus-areas" placeholder="e.g., System Design, Algorithms, Databases" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm text-gray-100">
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="auto-save" class="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded">
+                        <label for="auto-save" class="text-sm text-gray-300">Auto-save session every 5 questions</label>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" id="show-hints" class="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded" checked>
+                        <label for="show-hints" class="text-sm text-gray-300">Show hints for difficult questions</label>
+                    </div>
+                    <button onclick="saveSettings()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition">
+                        Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Learning Resources Modal -->
+        <div id="learning-resources-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div class="analytics-card rounded-2xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-2xl font-bold text-purple-400"><i class="fa-solid fa-book mr-2"></i>Learning Resources</h2>
+                    <button onclick="showLearningResources()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+                </div>
+                <div id="learning-resources-content" class="space-y-4">
+                    <p class="text-gray-400 text-center py-8">Generate personalized learning recommendations based on your interview performance.</p>
+                    <button onclick="generateLearningResources()" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition">
+                        <i class="fa-solid fa-magic mr-2"></i> Generate Recommendations
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="sticky bottom-0 p-4 bg-gradient-to-t from-[#0f1115] via-[#0f1115] to-[#0f1115]/95 border-t border-gray-800/50 z-20 flex-shrink-0 w-full backdrop-blur-md shadow-[0_-4px_20px_rgba(0,0,0,0.3)]">
+            <div id="timer-msg" class="hidden text-center text-xs text-red-400 mb-2 animate-pulse">
+                <i class="fa-solid fa-clock"></i> No activity detected. Byte will nudge you shortly...
+            </div>
+
+            <div class="flex items-center gap-3 relative">
+                <button id="mic-btn" onclick="toggleVoice()" class="p-4 rounded-full bg-gray-800 text-gray-400 hover:bg-gray-700 transition-all duration-200 border border-gray-700 shadow-lg flex-shrink-0 hover:scale-105 active:scale-95">
+                    <i class="fa-solid fa-microphone"></i>
+                </button>
+                
+                <input type="text" id="user-input" class="flex-1 bg-gray-900 border border-gray-700 rounded-full px-6 py-4 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50 transition-all duration-200 shadow-inner text-gray-100 placeholder-gray-500" placeholder="Type or Speak your answer..." onkeypress="if(event.key === 'Enter') sendMessage()">
+                
+                <button onclick="sendMessage()" class="p-4 rounded-full bg-purple-600 text-white hover:bg-purple-500 transition-all duration-200 shadow-[0_0_10px_rgba(147,51,234,0.5)] flex-shrink-0 hover:scale-105 active:scale-95 hover:shadow-[0_0_15px_rgba(147,51,234,0.7)]">
+                    <i class="fa-solid fa-paper-plane"></i>
+                </button>
+            </div>
+            <p class="text-center text-xs text-gray-500 mt-2 font-medium">Voice Mode: Click Mic to Speak • "Insight" replies via Audio.</p>
+        </div>
+    </div>
+
+    <script>
+        // --- GLOBAL STATE ---
+        let history = [];
+        let silenceTimer;
+        let isRecording = false;
+        let synth = window.speechSynthesis;
+        let scoreHistory = []; // Track all scores
+        let interviewStartTime = null;
+        let interviewTimer = null;
+        let questionStartTime = null;
+        let currentSessionId = null;
+        let interviewSettings = {
+            difficulty: 'adaptive',
+            duration: 45,
+            focusAreas: '',
+            autoSave: false,
+            showHints: true
+        };
+
+        // --- 1. SETUP LOGIC ---
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData();
+            formData.append('resume', document.getElementById('resume-file').files[0]);
+            formData.append('jd', document.getElementById('jd-text').value);
+            formData.append('role', document.getElementById('role-select').value);
+
+            if (!document.getElementById('role-select').value) {
+                alert("Please select an interview role.");
+                return;
+            }
+
+            const btn = e.target.querySelector('button');
+            const originalText = btn.innerText;
+            btn.innerText = "Initializing Agents...";
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/upload-context', { method: 'POST', body: formData });
+                const data = await res.json();
+                
+                if(data.status === 'success') {
+                    document.getElementById('setup-screen').classList.add('hidden');
+                    document.getElementById('chat-screen').classList.remove('hidden');
+                    document.getElementById('chat-screen').classList.add('flex');
+                    document.getElementById('phase-badge').classList.remove('hidden');
+                    document.getElementById('analytics-panel').classList.remove('hidden');
+                    
+                    // Update role in UI
+                    const roleSelect = document.getElementById('role-select');
+                    const selectedOption = roleSelect.options[roleSelect.selectedIndex];
+                    document.getElementById('phase-badge').innerHTML = `<span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> ${selectedOption.text} Interview`;
+                    
+                    // Reset score history for new session
+                    scoreHistory = [];
+                    analyticsData = {};
+                    
+                    // Trigger Intro
+                    sendMessage("Ready to begin.", true);
+                } else {
+                    alert("Error: " + data.error);
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Server Connection Failed.");
+                btn.innerText = originalText;
+                btn.disabled = false;
+            }
+        });
+
+        // --- 2. CHAT LOGIC ---
+        async function sendMessage(manualMsg = null, isSystemTrigger = false) {
+            clearTimeout(silenceTimer);
+            document.getElementById('timer-msg').classList.add('hidden');
+
+            const input = document.getElementById('user-input');
+            const msg = manualMsg || input.value.trim();
+            if(!msg) return;
+
+            if(synth.speaking) synth.cancel();
+
+            // User Message UI
+            if(!isSystemTrigger) {
+                appendMessage('user', msg);
+                input.value = '';
+                history.push({role: 'user', content: msg});
+            }
+
+            // Start Silence Timer (60s)
+            silenceTimer = setTimeout(() => {
+                document.getElementById('timer-msg').classList.remove('hidden');
+                sendMessage("[SYSTEM_TIMEOUT]", true);
+            }, 60000);
+
+            // Show Loader
+            const loaderId = appendLoader();
+
+            try {
+                const res = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ message: msg, history: history })
+                });
+                
+                const data = await res.json();
+                document.getElementById(loaderId).remove();
+
+                // Check if interview is complete (feedback)
+                if (data.interview_complete) {
+                    // Store analytics data with score history
+                    if (data.analytics) {
+                        analyticsData = {
+                            total_questions: data.analytics.total_questions || 0,
+                            average_score: data.analytics.average_score || 0,
+                            highest_score: data.analytics.highest_score || 0,
+                            lowest_score: data.analytics.lowest_score || 0,
+                            edge_cases_count: data.analytics.edge_cases_count || 0,
+                            scores: scoreHistory.length > 0 ? scoreHistory : (data.analytics.scores || []),
+                            trend: scoreHistory.length > 1 && scoreHistory[scoreHistory.length - 1] > scoreHistory[0] ? 'improving' : 
+                                   scoreHistory.length > 1 && scoreHistory[scoreHistory.length - 1] < scoreHistory[0] ? 'declining' : 'stable'
+                        };
+                    }
+                    // Render feedback with proper markdown formatting
+                    renderFeedback(data.response, analyticsData, data.debug);
+                    updateAnalytics(data.debug, analyticsData, true);
+                } else {
+                    // Store raw for history context
+                    history.push({role: 'assistant', content: data.response});
+
+                    // PARSE: Split [ANALYSIS] (Thoughts) from [RESPONSE] (Speech)
+                    const parts = data.response.split('[RESPONSE]');
+                    const thought = parts[0] ? parts[0].replace('[ANALYSIS]', '').trim() : "Processing...";
+                    const spoken = parts[1] ? parts[1].trim() : data.response;
+
+                    // Render Agent Response
+                    appendAIMessage(spoken, thought, data.debug);
+
+                    // Track scores
+                    if (data.debug && data.debug.score && data.debug.score !== 'N/A' && typeof data.debug.score === 'number') {
+                        scoreHistory.push(data.debug.score);
+                    }
+
+                    // Update Analytics Dashboard
+                    const analyticsWithScores = {
+                        ...data.analytics,
+                        scores: scoreHistory
+                    };
+                    updateAnalytics(data.debug, analyticsWithScores);
+
+                    // Handle Edge Case Detection
+                    if (data.debug.is_edge_case) {
+                        showEdgeCaseIndicator();
+                    }
+
+                    // Audio
+                    speak(spoken);
+                }
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById(loaderId).remove();
+            }
+        }
+
+        // --- 3. UI RENDERING ---
+        function appendMessage(role, text) {
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.className = `flex flex-col ${role === 'user' ? 'items-end' : 'items-start'} animate-fade-in-up mb-4`;
+            div.innerHTML = `
+                <div class="${role === 'user' ? 'bg-gradient-to-br from-purple-600 to-purple-700 text-white rounded-br-none shadow-lg shadow-purple-500/20' : 'bg-gray-800 text-gray-200 border border-gray-700/50'} p-4 rounded-2xl max-w-2xl shadow-md text-sm md:text-base leading-relaxed transition-all duration-200 hover:shadow-lg">
+                    ${text}
+                </div>
+            `;
+            container.appendChild(div);
+            // Smooth scroll to bottom
+            setTimeout(() => {
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 10);
+        }
+
+        function appendAIMessage(response, thought, debug) {
+            const container = document.getElementById('chat-container');
+            const wrapper = document.createElement('div');
+            wrapper.className = "flex flex-col items-start max-w-3xl animate-fade-in-up w-full";
+
+            // AGENT VISUALIZATION (Badges)
+            let badgesHtml = '';
+            if(debug) {
+                const personaColor = debug.persona === 'normal' ? 'bg-blue-900 text-blue-200' : 
+                                   debug.persona === 'edge_case' ? 'bg-orange-900 text-orange-200' : 
+                                   'bg-red-900 text-red-200';
+                const edgeCaseBadge = debug.is_edge_case ? 
+                    `<span class="text-[10px] uppercase font-bold px-2 py-1 rounded bg-orange-900 text-orange-200 animate-pulse border border-orange-600">
+                        <i class="fa-solid fa-exclamation-triangle"></i> EDGE CASE: Off-Topic Question
+                    </span>` : '';
+                badgesHtml = `
+                    <div class="flex gap-2 mb-2 flex-wrap">
+                        <span class="text-[10px] uppercase font-bold px-2 py-1 rounded ${personaColor}">
+                            <i class="fa-solid fa-user-tag"></i> ${debug.persona || 'Analyzing'}
+                        </span>
+                        ${edgeCaseBadge}
+                        ${debug.score && debug.score !== 'N/A' ? `<span class="text-[10px] uppercase font-bold px-2 py-1 rounded bg-gray-700 text-gray-300"><i class="fa-solid fa-star"></i> Score: ${debug.score}</span>` : ''}
+                        ${debug.follow_up ? `<span class="text-[10px] uppercase font-bold px-2 py-1 rounded bg-yellow-900 text-yellow-200 animate-pulse"><i class="fa-solid fa-shovel"></i> Digging Deeper</span>` : ''}
+                    </div>
+                `;
+            }
+
+            // BRAIN PANEL (Collapsible Thought)
+            const details = document.createElement('details');
+            details.className = "mb-2 w-full group";
+            details.innerHTML = `
+                <summary class="flex items-center gap-2 text-xs text-purple-400 font-bold uppercase tracking-wider mb-1 select-none cursor-pointer hover:text-purple-300">
+                    <i class="fa-solid fa-microchip"></i> Agent Thought Process
+                    <span class="text-[10px] text-gray-500 ml-auto transition-transform group-open:rotate-180"><i class="fa-solid fa-chevron-down"></i></span>
+                </summary>
+                <div class="brain-panel p-3 rounded-r-lg rounded-bl-lg text-xs text-gray-400 font-mono leading-relaxed shadow-inner bg-gray-900">
+                    ${thought.replace(/\n/g, '<br>')}
+                </div>
+            `;
+
+            // RESPONSE BUBBLE
+            const bubble = document.createElement('div');
+            bubble.className = "bg-gray-800 border border-gray-700/50 text-gray-100 p-5 rounded-2xl rounded-tl-none shadow-xl text-sm md:text-base leading-relaxed mt-1 w-full transition-all duration-200 hover:shadow-2xl hover:border-gray-600";
+            bubble.innerHTML = badgesHtml + response.replace(/\*\*(.*?)\*\*/g, '<b class="text-purple-300 font-semibold">$1</b>').replace(/\n/g, '<br>');
+
+            wrapper.appendChild(details);
+            wrapper.appendChild(bubble);
+            container.appendChild(wrapper);
+            // Smooth scroll to bottom
+            setTimeout(() => {
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 10);
+        }
+
+        function appendLoader() {
+            const id = 'loader-' + Date.now();
+            const container = document.getElementById('chat-container');
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = "flex items-center gap-1 text-gray-500 text-xs ml-2 mt-2";
+            div.innerHTML = `
+                <span class="text-purple-500 font-bold">Byte is thinking</span>
+                <div class="bg-purple-500 w-1 h-1 rounded-full typing-dot"></div>
+                <div class="bg-purple-500 w-1 h-1 rounded-full typing-dot"></div>
+                <div class="bg-purple-500 w-1 h-1 rounded-full typing-dot"></div>
+            `;
+            container.appendChild(div);
+            // Smooth scroll to bottom
+            setTimeout(() => {
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 10);
+            return id;
+        }
+
+        // --- 4. VOICE FEATURES ---
+        function getBestVoice() {
+            const voices = synth.getVoices();
+            return voices.find(v => v.name.includes('Google US English')) || voices.find(v => v.name.includes('Zira')) || voices[0];
+        }
+
+        function speak(text) {
+            if (synth.speaking) synth.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.voice = getBestVoice();
+            utterance.rate = 1.0;
+            
+            const micBtn = document.getElementById('mic-btn');
+            utterance.onstart = () => micBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            utterance.onend = () => micBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            
+            synth.speak(utterance);
+        }
+
+        function toggleVoice() {
+            if (!('webkitSpeechRecognition' in window)) {
+                alert("Voice features require Google Chrome.");
+                return;
+            }
+            const btn = document.getElementById('mic-btn');
+            if(isRecording) {
+                isRecording = false;
+                btn.className = "p-4 rounded-full bg-gray-800 text-gray-400 hover:bg-gray-700 transition border border-gray-700 shadow-lg flex-shrink-0";
+                return;
+            }
+
+            const recognition = new webkitSpeechRecognition();
+            recognition.continuous = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                if(synth.speaking) synth.cancel();
+                isRecording = true;
+                btn.className = "p-4 rounded-full bg-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)] border-none flex-shrink-0";
+            };
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                document.getElementById('user-input').value = transcript;
+                sendMessage();
+            };
+
+            recognition.onend = () => {
+                isRecording = false;
+                btn.className = "p-4 rounded-full bg-gray-800 text-gray-400 hover:bg-gray-700 transition border border-gray-700 shadow-lg flex-shrink-0";
+            };
+
+            recognition.start();
+        }
+
+        window.speechSynthesis.onvoiceschanged = getBestVoice;
+
+        // --- 5. ANALYTICS & EDGE CASE HANDLING ---
+        function updateAnalytics(debug, analytics, isComplete = false) {
+            // Store analytics data for modal
+            if (analytics) {
+                analyticsData = { ...analytics };
+            }
+            
+            if (debug) {
+                // Update question count
+                const questionCountEl = document.getElementById('question-count');
+                if (questionCountEl && debug.question_count !== undefined) {
+                    questionCountEl.textContent = debug.question_count;
+                }
+
+                // Update average score
+                const avgScoreEl = document.getElementById('avg-score');
+                if (avgScoreEl) {
+                    const avg = analytics?.average_score || debug.average_score;
+                    if (avg !== undefined && avg !== 'N/A') {
+                        const avgNum = typeof avg === 'number' ? avg : parseFloat(avg);
+                        avgScoreEl.textContent = avgNum.toFixed(1);
+                        // Color code based on score
+                        if (avgNum >= 80) {
+                            avgScoreEl.className = 'text-green-400 font-bold';
+                        } else if (avgNum >= 60) {
+                            avgScoreEl.className = 'text-yellow-400 font-bold';
+                        } else {
+                            avgScoreEl.className = 'text-red-400 font-bold';
+                        }
+                    } else if (isComplete && analytics?.average_score !== undefined) {
+                        avgScoreEl.textContent = analytics.average_score.toFixed(1);
+                    }
+                }
+
+                // Update phase
+                const phaseEl = document.getElementById('current-phase');
+                if (phaseEl && debug.phase) {
+                    phaseEl.textContent = debug.phase;
+                }
+            }
+            
+            // Update analytics data with complete info
+            if (isComplete && analytics) {
+                analyticsData = {
+                    ...analyticsData,
+                    ...analytics,
+                    scores: analytics.scores || []
+                };
+            }
+        }
+
+        function showEdgeCaseIndicator() {
+            const indicator = document.getElementById('edge-case-indicator');
+            if (indicator) {
+                indicator.classList.remove('hidden');
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    indicator.classList.add('hidden');
+                }, 5000);
+            }
+        }
+
+        let analyticsData = {};
+
+        function toggleAnalytics() {
+            const modal = document.getElementById('analytics-modal');
+            if (modal.classList.contains('hidden')) {
+                renderAnalyticsModal();
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function renderAnalyticsModal() {
+            const content = document.getElementById('analytics-content');
+            const data = analyticsData;
+            
+            if (!data || Object.keys(data).length === 0) {
+                content.innerHTML = '<p class="text-gray-400 text-center py-8">No analytics data available yet. Complete some questions first!</p>';
+                return;
+            }
+
+            const scores = data.scores || [];
+            const avgScore = data.average_score || 0;
+            const totalQuestions = data.total_questions || 0;
+            const highestScore = data.highest_score || 0;
+            const lowestScore = data.lowest_score || 0;
+            const edgeCasesCount = data.edge_cases_count || 0;
+            const trend = data.trend || 'stable';
+
+            // Calculate score distribution
+            const excellent = scores.filter(s => s >= 90).length;
+            const good = scores.filter(s => s >= 70 && s < 90).length;
+            const satisfactory = scores.filter(s => s >= 50 && s < 70).length;
+            const needsImprovement = scores.filter(s => s < 50).length;
+
+            content.innerHTML = `
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                        <div class="text-gray-400 text-sm mb-1">Total Questions</div>
+                        <div class="text-3xl font-bold text-purple-400">${totalQuestions}</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                        <div class="text-gray-400 text-sm mb-1">Average Score</div>
+                        <div class="text-3xl font-bold ${avgScore >= 80 ? 'text-green-400' : avgScore >= 60 ? 'text-yellow-400' : 'text-red-400'}">${avgScore.toFixed(1)}%</div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                        <div class="text-gray-400 text-sm mb-1">Performance Trend</div>
+                        <div class="text-3xl font-bold ${trend === 'improving' ? 'text-green-400' : 'text-gray-400'}">
+                            ${trend === 'improving' ? '↗' : trend === 'declining' ? '↘' : '→'}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                        <div class="text-gray-400 text-sm mb-2">Score Range</div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span>Highest</span>
+                                <span class="text-green-400 font-bold">${highestScore}%</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>Lowest</span>
+                                <span class="text-red-400 font-bold">${lowestScore}%</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span>Range</span>
+                                <span class="text-gray-300">${(highestScore - lowestScore).toFixed(1)}%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                        <div class="text-gray-400 text-sm mb-2">Edge Cases</div>
+                        <div class="text-2xl font-bold ${edgeCasesCount > 0 ? 'text-orange-400' : 'text-green-400'}">${edgeCasesCount}</div>
+                        <div class="text-xs text-gray-500 mt-1">Off-topic questions detected</div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700 mb-6">
+                    <div class="text-gray-400 text-sm mb-4">Score Distribution</div>
+                    <div class="space-y-3">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-green-400">Excellent (90-100%)</span>
+                                <span class="text-gray-300">${excellent}</span>
+                            </div>
+                            <div class="score-bar bg-green-500" style="width: ${(excellent / Math.max(totalQuestions, 1)) * 100}%"></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-yellow-400">Good (70-89%)</span>
+                                <span class="text-gray-300">${good}</span>
+                            </div>
+                            <div class="score-bar bg-yellow-500" style="width: ${(good / Math.max(totalQuestions, 1)) * 100}%"></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-orange-400">Satisfactory (50-69%)</span>
+                                <span class="text-gray-300">${satisfactory}</span>
+                            </div>
+                            <div class="score-bar bg-orange-500" style="width: ${(satisfactory / Math.max(totalQuestions, 1)) * 100}%"></div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-red-400">Needs Improvement (&lt;50%)</span>
+                                <span class="text-gray-300">${needsImprovement}</span>
+                            </div>
+                            <div class="score-bar bg-red-500" style="width: ${(needsImprovement / Math.max(totalQuestions, 1)) * 100}%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                ${scores.length > 0 ? `
+                <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                    <div class="text-gray-400 text-sm mb-4">Score Progression</div>
+                    <div class="flex items-end gap-1 h-32">
+                        ${scores.map((score, idx) => {
+                            const height = (score / 100) * 100;
+                            const color = score >= 80 ? 'bg-green-500' : score >= 60 ? 'bg-yellow-500' : 'bg-red-500';
+                            return `<div class="flex-1 flex flex-col items-center">
+                                <div class="${color} w-full rounded-t transition-all hover:opacity-80" style="height: ${height}%" title="Q${idx + 1}: ${score}%"></div>
+                                <div class="text-xs text-gray-500 mt-1">${idx + 1}</div>
+                            </div>`;
+                        }).join('')}
+                    </div>
+                </div>
+                ` : ''}
+            `;
+        }
+
+        function renderFeedback(feedbackText, analytics, debug) {
+            const container = document.getElementById('chat-container');
+            const wrapper = document.createElement('div');
+            wrapper.className = "flex flex-col items-start max-w-4xl animate-fade-in-up w-full mb-6";
+            
+            // Format feedback with markdown
+            const formattedFeedback = formatMarkdown(feedbackText);
+            
+            wrapper.innerHTML = `
+                <div class="w-full bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-purple-500/30 rounded-2xl p-6 shadow-2xl">
+                    <div class="flex items-center gap-3 mb-4 pb-4 border-b border-gray-700">
+                        <div class="bg-purple-600 p-3 rounded-lg">
+                            <i class="fa-solid fa-clipboard-check text-white text-xl"></i>
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-purple-400">Interview Feedback Report</h2>
+                            <p class="text-xs text-gray-400">Comprehensive performance analysis</p>
+                        </div>
+                    </div>
+                    <div class="feedback-content text-gray-100 prose prose-invert max-w-none">
+                        ${formattedFeedback}
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(wrapper);
+            setTimeout(() => {
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: 'smooth'
+                });
+            }, 10);
+        }
+
+        function formatMarkdown(text) {
+            if (!text) return '';
+            
+            let html = text;
+            
+            // Process tables first (before other formatting)
+            const tableRegex = /(\|.+\|\n\|[-\s:]+\|\n(?:\|.+\|\n?)+)/g;
+            html = html.replace(tableRegex, (match) => {
+                const lines = match.trim().split('\n').filter(l => l.trim());
+                if (lines.length < 2) return match;
+                
+                // Skip separator line (second line)
+                const headerLine = lines[0];
+                const dataLines = lines.slice(2);
+                
+                const headerCells = headerLine.split('|').map(c => c.trim()).filter(c => c);
+                const headerRow = `<thead><tr>${headerCells.map(h => `<th>${h}</th>`).join('')}</tr></thead>`;
+                
+                const bodyRows = dataLines.map(line => {
+                    const cells = line.split('|').map(c => c.trim()).filter(c => c);
+                    return `<tr>${cells.map(cell => `<td>${formatInlineMarkdown(cell)}</td>`).join('')}</tr>`;
+                }).join('');
+                
+                return `<table>${headerRow}<tbody>${bodyRows}</tbody></table>`;
+            });
+            
+            // Headers
+            html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+            html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+            html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+            
+            // Horizontal rules
+            html = html.replace(/^---$/gim, '<hr class="border-gray-700 my-4">');
+            
+            // Bold and italic (process bold first, then italic)
+            html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // Numbered lists
+            html = html.replace(/^\d+\.\s+(.+)$/gim, '<li>$1</li>');
+            // Wrap consecutive list items
+            html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => {
+                return '<ol>' + match.replace(/\n/g, '') + '</ol>';
+            });
+            
+            // Bullet lists
+            html = html.replace(/^[-*]\s+(.+)$/gim, '<li>$1</li>');
+            // Wrap consecutive bullet items (but not already wrapped)
+            html = html.replace(/(<li>.*<\/li>\n?)+(?!<\/ol>)/g, (match) => {
+                if (!match.includes('<ol>')) {
+                    return '<ul>' + match.replace(/\n/g, '') + '</ul>';
+                }
+                return match;
+            });
+            
+            // Split into paragraphs (double newlines)
+            const paragraphs = html.split(/\n\n+/);
+            html = paragraphs.map(p => {
+                p = p.trim();
+                if (!p) return '';
+                // Don't wrap if it's already a block element
+                if (p.match(/^<(h[1-3]|table|ol|ul|hr)/)) {
+                    return p;
+                }
+                return '<p>' + p + '</p>';
+            }).join('');
+            
+            // Process inline markdown in paragraphs
+            html = html.replace(/<p>(.*?)<\/p>/g, (match, content) => {
+                return '<p>' + formatInlineMarkdown(content) + '</p>';
+            });
+            
+            // Clean up
+            html = html.replace(/<p><\/p>/g, '');
+            html = html.replace(/\n/g, '<br>');
+            
+            return html;
+        }
+        
+        function formatInlineMarkdown(text) {
+            if (!text) return '';
+            // Bold
+            text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            // Italic
+            text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            // Code
+            text = text.replace(/`(.*?)`/g, '<code class="bg-gray-900 px-1 rounded text-purple-300">$1</code>');
+            return text;
+        }
+
+        async function exportFeedback() {
+            try {
+                const res = await fetch('/get-feedback', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.feedback) {
+                    // Create a downloadable text file
+                    const blob = new Blob([data.feedback], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `interview-feedback-${new Date().toISOString().split('T')[0]}.txt`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    alert('No feedback available yet. Complete the interview first.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Failed to export feedback.');
+            }
+        }
+
+        // --- 6. ADVANCED FEATURES ---
+        
+        // Time Tracking
+        function startInterviewTimer() {
+            interviewStartTime = Date.now();
+            interviewTimer = setInterval(() => {
+                if (interviewStartTime) {
+                    const elapsed = Math.floor((Date.now() - interviewStartTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    const timeEl = document.getElementById('interview-time');
+                    if (timeEl) {
+                        timeEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    }
+                }
+            }, 1000);
+        }
+
+        function stopInterviewTimer() {
+            if (interviewTimer) {
+                clearInterval(interviewTimer);
+                interviewTimer = null;
+            }
+        }
+
+        // Session Management
+        async function saveCurrentSession() {
+            try {
+                const res = await fetch('/save-session', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ session_id: currentSessionId })
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert('Session saved successfully!');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Failed to save session.');
+            }
+        }
+
+        async function showSessionHistory() {
+            const modal = document.getElementById('session-history-modal');
+            if (modal.classList.contains('hidden')) {
+                try {
+                    const res = await fetch('/list-sessions');
+                    const data = await res.json();
+                    const content = document.getElementById('session-history-content');
+                    
+                    if (data.sessions && data.sessions.length > 0) {
+                        content.innerHTML = data.sessions.map(session => `
+                            <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700 hover:border-purple-500 transition cursor-pointer" onclick="loadSession('${session.session_id}')">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <div class="font-bold text-purple-400">${session.role || 'Interview'}</div>
+                                        <div class="text-xs text-gray-400 mt-1">${new Date(session.timestamp).toLocaleString()}</div>
+                                        <div class="flex gap-4 mt-2 text-xs">
+                                            <span class="text-gray-400">Questions: <span class="text-white">${session.question_count}</span></span>
+                                            <span class="text-gray-400">Score: <span class="text-green-400">${session.average_score.toFixed(1)}%</span></span>
+                                        </div>
+                                    </div>
+                                    <button onclick="event.stopPropagation(); deleteSession('${session.session_id}')" class="text-red-400 hover:text-red-300">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        content.innerHTML = '<p class="text-gray-400 text-center py-8">No saved sessions yet.</p>';
+                    }
+                } catch (err) {
+                    console.error(err);
+                    document.getElementById('session-history-content').innerHTML = '<p class="text-red-400 text-center py-8">Failed to load sessions.</p>';
+                }
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        async function loadSession(sessionId) {
+            try {
+                const res = await fetch(`/load-session/${sessionId}`);
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert('Session loaded! (Full restore coming soon)');
+                    showSessionHistory();
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Failed to load session.');
+            }
+        }
+
+        async function deleteSession(sessionId) {
+            if (confirm('Delete this session?')) {
+                // In production, add DELETE endpoint
+                alert('Session deletion coming soon');
+                showSessionHistory();
+            }
+        }
+
+        // Settings
+        function showSettings() {
+            const modal = document.getElementById('settings-modal');
+            if (modal.classList.contains('hidden')) {
+                document.getElementById('difficulty-setting').value = interviewSettings.difficulty;
+                document.getElementById('duration-setting').value = interviewSettings.duration;
+                document.getElementById('focus-areas').value = interviewSettings.focusAreas;
+                document.getElementById('auto-save').checked = interviewSettings.autoSave;
+                document.getElementById('show-hints').checked = interviewSettings.showHints;
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function saveSettings() {
+            interviewSettings = {
+                difficulty: document.getElementById('difficulty-setting').value,
+                duration: parseInt(document.getElementById('duration-setting').value),
+                focusAreas: document.getElementById('focus-areas').value,
+                autoSave: document.getElementById('auto-save').checked,
+                showHints: document.getElementById('show-hints').checked
+            };
+            localStorage.setItem('interviewSettings', JSON.stringify(interviewSettings));
+            alert('Settings saved!');
+            showSettings();
+        }
+
+        function loadSettings() {
+            const saved = localStorage.getItem('interviewSettings');
+            if (saved) {
+                interviewSettings = JSON.parse(saved);
+            }
+        }
+
+        // Learning Resources
+        function showLearningResources() {
+            const modal = document.getElementById('learning-resources-modal');
+            if (modal.classList.contains('hidden')) {
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+
+        async function generateLearningResources() {
+            const content = document.getElementById('learning-resources-content');
+            content.innerHTML = '<p class="text-gray-400 text-center py-8"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Generating recommendations...</p>';
+            
+            try {
+                const res = await fetch('/get-learning-resources', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        scores: scoreHistory,
+                        feedback: document.querySelector('.feedback-content')?.innerText || '',
+                        role: document.getElementById('role-select')?.value || ''
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success' && data.resources) {
+                    const recommendations = data.resources.recommendations || data.resources;
+                    content.innerHTML = `
+                        <div class="space-y-4">
+                            ${Array.isArray(recommendations) ? recommendations.map(rec => `
+                                <div class="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <div class="font-bold text-purple-400">${rec.title || 'Resource'}</div>
+                                            <div class="text-sm text-gray-400 mt-1">${rec.description || ''}</div>
+                                            <div class="flex gap-2 mt-2">
+                                                <span class="text-xs px-2 py-1 rounded bg-gray-700 text-gray-300">${rec.type || 'resource'}</span>
+                                                <span class="text-xs px-2 py-1 rounded ${rec.priority === 'high' ? 'bg-red-900 text-red-200' : rec.priority === 'medium' ? 'bg-yellow-900 text-yellow-200' : 'bg-blue-900 text-blue-200'}">${rec.priority || 'medium'} priority</span>
+                                            </div>
+                                        </div>
+                                        ${rec.url ? `<a href="${rec.url}" target="_blank" class="text-purple-400 hover:text-purple-300 ml-4"><i class="fa-solid fa-external-link"></i></a>` : ''}
+                                    </div>
+                                </div>
+                            `).join('') : '<p class="text-gray-400">No recommendations available.</p>'}
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error(err);
+                content.innerHTML = '<p class="text-red-400 text-center py-8">Failed to generate recommendations.</p>';
+            }
+        }
+
+        // PDF Export
+        async function exportPDF() {
+            try {
+                const feedbackText = document.querySelector('.feedback-content')?.innerText || '';
+                const roleSelect = document.getElementById('role-select');
+                const role = roleSelect ? roleSelect.options[roleSelect.selectedIndex]?.text : 'Interview';
+                
+                const res = await fetch('/export-pdf', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        feedback: feedbackText,
+                        analytics: analyticsData,
+                        role: role
+                    })
+                });
+                
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `interview-feedback-${new Date().toISOString().split('T')[0]}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    const data = await res.json();
+                    alert(data.message || 'PDF export failed. Install reportlab: pip install reportlab');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('PDF export requires reportlab library. Install with: pip install reportlab');
+            }
+        }
+
+        // Keyboard Shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + S to save
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                if (currentSessionId) saveCurrentSession();
+            }
+            // Escape to close modals
+            if (e.key === 'Escape') {
+                document.querySelectorAll('[id$="-modal"]').forEach(modal => {
+                    if (!modal.classList.contains('hidden')) {
+                        modal.classList.add('hidden');
+                    }
+                });
+            }
+            // Shortcuts when not in input
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                if (e.key === 'h' || e.key === 'H') {
+                    e.preventDefault();
+                    showSessionHistory();
+                } else if (e.key === 's' || e.key === 'S') {
+                    if (!e.ctrlKey && !e.metaKey) {
+                        e.preventDefault();
+                        showSettings();
+                    }
+                } else if (e.key === 'a' || e.key === 'A') {
+                    e.preventDefault();
+                    toggleAnalytics();
+                } else if (e.key === 'l' || e.key === 'L') {
+                    e.preventDefault();
+                    showLearningResources();
+                } else if (e.key === 'p' || e.key === 'P') {
+                    e.preventDefault();
+                    exportPDF();
+                } else if (e.key === 'e' || e.key === 'E') {
+                    e.preventDefault();
+                    exportFeedback();
+                }
+            }
+        });
+
+        // Auto-save functionality
+        let questionCountForAutoSave = 0;
+        const originalUpdateAnalyticsFn = updateAnalytics;
+        updateAnalytics = function(debug, analytics, isComplete) {
+            originalUpdateAnalyticsFn(debug, analytics, isComplete);
+            if (interviewSettings.autoSave && debug && debug.question_count && debug.question_count % 5 === 0 && debug.question_count !== questionCountForAutoSave) {
+                questionCountForAutoSave = debug.question_count;
+                saveCurrentSession();
+            }
+        };
+    </script>
+</body>
 </html>
