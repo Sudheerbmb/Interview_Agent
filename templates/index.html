@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Insight | Intelligent Interview Agent</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+
+        body { background-color: #0f1115; color: #e5e7eb; font-family: 'Inter', sans-serif; }
+
+       
+
+        /* Glassmorphism */
+
+        .glass-panel { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
+
+        .brain-panel { border-left: 3px solid #a855f7; background: #18181b; }
+
+       
+
+        /* Custom Scrollbar */
+
+        ::-webkit-scrollbar { width: 8px; }
+
+        ::-webkit-scrollbar-track { background: #1f2937; }
+
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; }
+
+
+
+        /* Animation */
+
+        @keyframes fadeInUp {
+
+            from { opacity: 0; transform: translateY(10px); }
+
+            to { opacity: 1; transform: translateY(0); }
+
+        }
+
+        .animate-fade-in-up { animation: fadeInUp 0.4s ease-out forwards; }
+
+       
+
+        /* Typing indicator dots */
+
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+
+    </style>
+
+</head>
+
+<body class="h-screen flex flex-col font-sans overflow-hidden">
+
+
+
+    <nav class="border-b border-gray-800 p-4 flex justify-between items-center bg-[#0f1115] z-10">
+
+        <div class="flex items-center gap-2">
+
+            <div class="bg-purple-600 p-2 rounded-lg"><i class="fa-solid fa-brain text-white"></i></div>
+
+            <h1 class="text-xl font-bold tracking-tight">Insight <span class="text-gray-500 font-normal">| Interview Agent</span></h1>
+
+        </div>
+
+        <div id="phase-badge" class="hidden px-3 py-1 rounded-full text-xs font-bold bg-green-900 text-green-400 uppercase flex items-center gap-2">
+
+            <span class="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span> Live Session
+
+        </div>
+
+    </nav>
+
+
+
+    <div id="setup-screen" class="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
+
+        <div class="w-full max-w-xl glass-panel p-8 rounded-2xl shadow-2xl animate-fade-in-up">
+
+            <h2 class="text-2xl font-bold mb-2">Configure Session</h2>
+
+            <p class="text-gray-400 mb-6 text-sm">Upload candidate profile (PDF) and target role to initialize the Multi-Agent System.</p>
+
+
+
+            <form id="upload-form" class="space-y-4">
+
+                <div>
+
+                    <label class="block text-sm font-medium mb-1 text-gray-300">Resume (PDF)</label>
+
+                    <div class="relative border-2 border-dashed border-gray-700 rounded-lg p-6 hover:border-purple-500 transition text-center cursor-pointer group" onclick="document.getElementById('resume-file').click()">
+
+                        <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-500 mb-2 group-hover:text-purple-400 transition"></i>
+
+                        <p class="text-xs text-gray-400">Click to upload PDF</p>
+
+                        <input type="file" id="resume-file" accept=".pdf" class="hidden" required onchange="document.querySelector('#file-name').innerText = this.files[0].name">
+
+                    </div>
+
+                    <p id="file-name" class="text-xs text-purple-400 mt-2 h-4"></p>
+
+                </div>
+
+
+
+                <div>
+
+                    <label class="block text-sm font-medium mb-1 text-gray-300">Job Description</label>
+
+                    <textarea id="jd-text" rows="4" class="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-sm focus:outline-none focus:border-purple-500 transition" placeholder="Paste the Job Description here..." required></textarea>
+
+                </div>
+
+
+
+                <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-3 rounded-lg transition shadow-[0_0_15px_rgba(147,51,234,0.3)]">
+
+                    Start Interview
+
+                </button>
+
+            </form>
+
+        </div>
+
+    </div>
+
+
+
+    <div id="chat-screen" class="hidden flex-1 flex flex-col max-w-4xl mx-auto w-full pt-4 h-full">
+
+       
+
+        <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth pb-20">
+
+            </div>
+
+
+
+        <div class="p-4 bg-[#0f1115] border-t border-gray-800 z-10">
+
+            <div id="timer-msg" class="hidden text-center text-xs text-red-400 mb-2 animate-pulse">
+
+                <i class="fa-solid fa-clock"></i> No activity detected. Byte will nudge you shortly...
+
+            </div>
+
+
+
+            <div class="flex items-center gap-3 relative">
+
+                <button id="mic-btn" onclick="toggleVoice()" class="p-4 rounded-full bg-gray-800 text-gray-400 hover:bg-gray-700 transition border border-gray-700 shadow-lg">
+
+                    <i class="fa-solid fa-microphone"></i>
+
+                </button>
+
+               
+
+                <input type="text" id="user-input" class="flex-1 bg-gray-900 border border-gray-700 rounded-full px-6 py-4 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition shadow-inner" placeholder="Type or Speak your answer..." onkeypress="if(event.key === 'Enter') sendMessage()">
+
+               
+
+                <button onclick="sendMessage()" class="p-4 rounded-full bg-purple-600 text-white hover:bg-purple-500 transition shadow-[0_0_10px_rgba(147,51,234,0.5)]">
+
+                    <i class="fa-solid fa-paper-plane"></i>
+
+                </button>
+
+            </div>
+
+            <p class="text-center text-xs text-gray-600 mt-2">Voice Mode: Click Mic to Speak • "Insight" replies via Audio.</p>
+
+        </div>
+
+    </div>
+
+
+
+    <script>
+
+        // --- GLOBAL STATE ---
+
+        let history = [];
+
+        let silenceTimer;
+
+        let isRecording = false;
+
+        let synth = window.speechSynthesis;
+
+
+
+        // --- 1. SETUP LOGIC ---
+
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+
+            e.preventDefault();
+
+            const formData = new FormData();
+
+            formData.append('resume', document.getElementById('resume-file').files[0]);
+
+            formData.append('jd', document.getElementById('jd-text').value);
+
+
+
+            const btn = e.target.querySelector('button');
+
+            const originalText = btn.innerText;
+
+            btn.innerText = "Initializing Agents...";
+
+            btn.disabled = true;
+
+
+
+            try {
+
+                const res = await fetch('/upload-context', { method: 'POST', body: formData });
+
+                const data = await res.json();
+
+               
+
+                if(data.status === 'success') {
+
+                    document.getElementById('setup-screen').classList.add('hidden');
+
+                    document.getElementById('chat-screen').classList.remove('hidden');
+
+                    document.getElementById('chat-screen').classList.add('flex');
+
+                    document.getElementById('phase-badge').classList.remove('hidden');
+
+                   
+
+                    // Trigger Intro
+
+                    sendMessage("Ready to begin.", true);
+
+                } else {
+
+                    alert("Error: " + data.error);
+
+                    btn.innerText = originalText;
+
+                    btn.disabled = false;
+
+                }
+
+            } catch (err) {
+
+                console.error(err);
+
+                alert("Server Connection Failed.");
+
+                btn.innerText = originalText;
+
+                btn.disabled = false;
+
+            }
+
+        });
+
+
+
+        // --- 2. CHAT LOGIC ---
+
+        async function sendMessage(manualMsg = null, isSystemTrigger = false) {
+
+            clearTimeout(silenceTimer);
+
+            document.getElementById('timer-msg').classList.add('hidden');
+
+
+
+            const input = document.getElementById('user-input');
+
+            const msg = manualMsg || input.value.trim();
+
+            if(!msg) return;
+
+
+
+            if(synth.speaking) synth.cancel();
+
+
+
+            // User Message UI
+
+            if(!isSystemTrigger) {
+
+                appendMessage('user', msg);
+
+                input.value = '';
+
+                history.push({role: 'user', content: msg});
+
+            }
+
+
+
+            // Start Silence Timer (60s)
+
+            silenceTimer = setTimeout(() => {
+
+                document.getElementById('timer-msg').classList.remove('hidden');
+
+                sendMessage("[SYSTEM_TIMEOUT]", true);
+
+            }, 60000);
+
+
+
+            // Show Loader
+
+            const loaderId = appendLoader();
+
+
+
+            try {
+
+                const res = await fetch('/chat', {
+
+                    method: 'POST',
+
+                    headers: {'Content-Type': 'application/json'},
+
+                    body: JSON.stringify({ message: msg, history: history })
+
+                });
+
+               
+
+                const data = await res.json();
+
+                document.getElementById(loaderId).remove();
+
+
+
+                // Store raw for history context
+
+                history.push({role: 'assistant', content: data.response});
+
+
+
+                // PARSE: Split [ANALYSIS] (Thoughts) from [RESPONSE] (Speech)
+
+                const parts = data.response.split('[RESPONSE]');
+
+                const thought = parts[0] ? parts[0].replace('[ANALYSIS]', '').trim() : "Processing...";
+
+                const spoken = parts[1] ? parts[1].trim() : data.response;
+
+
+
+                // Render Agent Response
+
+                appendAIMessage(spoken, thought, data.debug);
+
+
+
+                // Audio
+
+                speak(spoken);
+
+
+
+            } catch (err) {
+
+                console.error(err);
+
+                document.getElementById(loaderId).remove();
+
+            }
+
+        }
+
+
+
+        // --- 3. UI RENDERING ---
+
+        function appendMessage(role, text) {
+
+            const container = document.getElementById('chat-container');
+
+            const div = document.createElement('div');
+
+            div.className = `flex flex-col ${role === 'user' ? 'items-end' : 'items-start'} animate-fade-in-up`;
+
+            div.innerHTML = `
+
+                <div class="${role === 'user' ? 'bg-purple-600 text-white rounded-br-none' : 'bg-gray-800 text-gray-200'} p-4 rounded-2xl max-w-2xl shadow-md text-sm md:text-base">
+
+                    ${text}
+
+                </div>
+
+            `;
+
+            container.appendChild(div);
+
+            container.scrollTop = container.scrollHeight;
+
+        }
+
+
+
+        function appendAIMessage(response, thought, debug) {
+
+            const container = document.getElementById('chat-container');
+
+            const wrapper = document.createElement('div');
+
+            wrapper.className = "flex flex-col items-start max-w-3xl animate-fade-in-up w-full";
+
+
+
+            // AGENT VISUALIZATION (Badges)
+
+            let badgesHtml = '';
+
+            if(debug) {
+
+                const personaColor = debug.persona === 'normal' ? 'bg-blue-900 text-blue-200' : 'bg-red-900 text-red-200';
+
+                badgesHtml = `
+
+                    <div class="flex gap-2 mb-2">
+
+                        <span class="text-[10px] uppercase font-bold px-2 py-1 rounded ${personaColor}">
+
+                            <i class="fa-solid fa-user-tag"></i> ${debug.persona || 'Analyzing'}
+
+                        </span>
+
+                        ${debug.score ? `<span class="text-[10px] uppercase font-bold px-2 py-1 rounded bg-gray-700 text-gray-300"><i class="fa-solid fa-star"></i> Score: ${debug.score}</span>` : ''}
+
+                        ${debug.follow_up ? `<span class="text-[10px] uppercase font-bold px-2 py-1 rounded bg-yellow-900 text-yellow-200 animate-pulse"><i class="fa-solid fa-shovel"></i> Digging Deeper</span>` : ''}
+
+                    </div>
+
+                `;
+
+            }
+
+
+
+            // BRAIN PANEL (Collapsible Thought)
+
+            const details = document.createElement('details');
+
+            details.className = "mb-2 w-full group";
+
+            details.innerHTML = `
+
+                <summary class="flex items-center gap-2 text-xs text-purple-400 font-bold uppercase tracking-wider mb-1 select-none cursor-pointer hover:text-purple-300">
+
+                    <i class="fa-solid fa-microchip"></i> Agent Thought Process
+
+                    <span class="text-[10px] text-gray-500 ml-auto transition-transform group-open:rotate-180"><i class="fa-solid fa-chevron-down"></i></span>
+
+                </summary>
+
+                <div class="brain-panel p-3 rounded-r-lg rounded-bl-lg text-xs text-gray-400 font-mono leading-relaxed shadow-inner bg-gray-900">
+
+                    ${thought.replace(/\n/g, '<br>')}
+
+                </div>
+
+            `;
+
+
+
+            // RESPONSE BUBBLE
+
+            const bubble = document.createElement('div');
+
+            bubble.className = "bg-gray-800 border border-gray-700 text-gray-100 p-5 rounded-2xl rounded-tl-none shadow-xl text-sm md:text-base leading-relaxed mt-1 w-full";
+
+            bubble.innerHTML = badgesHtml + response.replace(/\*\*(.*?)\*\*/g, '<b class="text-purple-300">$1</b>').replace(/\n/g, '<br>');
+
+
+
+            wrapper.appendChild(details);
+
+            wrapper.appendChild(bubble);
+
+            container.appendChild(wrapper);
+
+            container.scrollTop = container.scrollHeight;
+
+        }
+
+
+
+        function appendLoader() {
+
+            const id = 'loader-' + Date.now();
+
+            const container = document.getElementById('chat-container');
+
+            const div = document.createElement('div');
+
+            div.id = id;
+
+            div.className = "flex items-center gap-1 text-gray-500 text-xs ml-2 mt-2";
+
+            div.innerHTML = `
+
+                <span class="text-purple-500 font-bold">Byte is thinking</span>
+
+                <div class="bg-purple-500 w-1 h-1 rounded-full typing-dot"></div>
+
+                <div class="bg-purple-500 w-1 h-1 rounded-full typing-dot"></div>
+
+                <div class="bg-purple-500 w-1 h-1 rounded-full typing-dot"></div>
+
+            `;
+
+            container.appendChild(div);
+
+            container.scrollTop = container.scrollHeight;
+
+            return id;
+
+        }
+
+
+
+        // --- 4. VOICE FEATURES ---
+
+        function getBestVoice() {
+
+            const voices = synth.getVoices();
+
+            return voices.find(v => v.name.includes('Google US English')) || voices.find(v => v.name.includes('Zira')) || voices[0];
+
+        }
+
+
+
+        function speak(text) {
+
+            if (synth.speaking) synth.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+
+            utterance.voice = getBestVoice();
+
+            utterance.rate = 1.0;
+
+           
+
+            const micBtn = document.getElementById('mic-btn');
+
+            utterance.onstart = () => micBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            utterance.onend = () => micBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+           
+
+            synth.speak(utterance);
+
+        }
+
+
+
+        function toggleVoice() {
+
+            if (!('webkitSpeechRecognition' in window)) {
+
+                alert("Voice features require Google Chrome.");
+
+                return;
+
+            }
+
+            const btn = document.getElementById('mic-btn');
+
+            if(isRecording) {
+
+                isRecording = false;
+
+                btn.className = "p-4 rounded-full bg-gray-800 text-gray-400 hover:bg-gray-700 transition border border-gray-700 shadow-lg";
+
+                return;
+
+            }
+
+
+
+            const recognition = new webkitSpeechRecognition();
+
+            recognition.continuous = false;
+
+            recognition.lang = 'en-US';
+
+
+
+            recognition.onstart = () => {
+
+                if(synth.speaking) synth.cancel();
+
+                isRecording = true;
+
+                btn.className = "p-4 rounded-full bg-red-600 text-white animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.5)] border-none";
+
+            };
+
+
+
+            recognition.onresult = (event) => {
+
+                const transcript = event.results[0][0].transcript;
+
+                document.getElementById('user-input').value = transcript;
+
+                sendMessage();
+
+            };
+
+
+
+            recognition.onend = () => {
+
+                isRecording = false;
+
+                btn.className = "p-4 rounded-full bg-gray-800 text-gray-400 hover:bg-gray-700 transition border border-gray-700 shadow-lg";
+
+            };
+
+
+
+            recognition.start();
+
+        }
+
+
+
+        window.speechSynthesis.onvoiceschanged = getBestVoice;
+
+    </script>
+
+</body>
+
+</html>
