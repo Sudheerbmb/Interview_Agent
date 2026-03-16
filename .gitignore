@@ -34,3 +34,6 @@ ENV/
 .venv
 age/
 
+# Local ChromaDB persistence (vector store)
+chroma_store/
+

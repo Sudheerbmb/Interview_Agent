@@ -13,12 +13,23 @@ import json
 import datetime
 import io
 import sys
+import subprocess
+import tempfile
+import time
+import logging
 from typing import Optional
 
 try:
     import redis
 except Exception:
     redis = None
+
+# Optional ChromaDB (vector database for semantic search over resume/JD/answers)
+try:
+    import chromadb
+    from chromadb.utils import embedding_functions
+except Exception:
+    chromadb = None
 
 # Optional PDF export (requires reportlab)
 try:
@@ -43,6 +54,9 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("interview_app")
+
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 # ---- Redis (optional) ----
@@ -66,6 +80,77 @@ def _redis_key_session(session_id: str) -> str:
 
 def _redis_key_saved(session_id: str) -> str:
     return f"insight:saved_session:{session_id}"
+
+
+def _redis_key_saved_index() -> str:
+    # Sorted set of saved session ids (score = epoch seconds)
+    return "insight:saved_sessions:index"
+
+
+def save_saved_session(saved_id: str, payload: dict):
+    """
+    Save a "snapshot" session summary (not the live interview state).
+    Redis-first; falls back to in-memory saved_sessions dict.
+    """
+    if not saved_id:
+        return
+    if _redis_client is not None:
+        try:
+            _redis_client.set(_redis_key_saved(saved_id), json.dumps(payload))
+            _redis_client.zadd(_redis_key_saved_index(), {saved_id: datetime.datetime.now().timestamp()})
+            return
+        except Exception:
+            pass
+    saved_sessions[saved_id] = payload
+
+
+def load_saved_session(saved_id: str):
+    if not saved_id:
+        return None
+    if _redis_client is not None:
+        try:
+            raw = _redis_client.get(_redis_key_saved(saved_id))
+            return json.loads(raw) if raw else None
+        except Exception:
+            return None
+    return saved_sessions.get(saved_id)
+
+
+def list_saved_sessions():
+    """
+    Return list of saved session payloads (newest first).
+    Redis-first; falls back to in-memory saved_sessions dict.
+    """
+    if _redis_client is not None:
+        try:
+            ids = _redis_client.zrevrange(_redis_key_saved_index(), 0, 200)
+            if not ids:
+                return []
+            pipe = _redis_client.pipeline()
+            for sid in ids:
+                pipe.get(_redis_key_saved(sid))
+            raws = pipe.execute()
+            out = []
+            for sid, raw in zip(ids, raws):
+                if not raw:
+                    continue
+                try:
+                    data = json.loads(raw)
+                    data.setdefault("session_id", sid)
+                    out.append(data)
+                except Exception:
+                    continue
+            return out
+        except Exception:
+            return []
+
+    sessions_list = []
+    for sid, data in saved_sessions.items():
+        d = dict(data or {})
+        d.setdefault("session_id", sid)
+        sessions_list.append(d)
+    sessions_list.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    return sessions_list
 
 
 def get_request_session_id() -> Optional[str]:
@@ -109,6 +194,8 @@ def default_session_state():
         "question_times": [],
         "session_id": None,
         "coding_round": None,
+        # Lightweight cache for retrieval context to avoid hammering Chroma
+        "retrieval_cache": {},
     }
 
 # Initialize all agents
@@ -116,6 +203,156 @@ profiler = ProfilerAgent(client)
 grader = GraderAgent(client)
 interviewer = InterviewerAgent(client)
 feedback_generator = FeedbackGeneratorAgent(client)
+
+# ---- ChromaDB (optional) ----
+# Used to store and semantically search over per-session documents (resume, JD, important answers).
+CHROMA_PERSIST_DIR = os.environ.get("CHROMA_DIR", os.path.join(os.path.dirname(__file__), "chroma_store"))
+
+_chroma_client = None
+_chroma_collection = None
+
+if chromadb is not None:
+    try:
+        _chroma_client = chromadb.PersistentClient(path=CHROMA_PERSIST_DIR)
+        # Use a simple default embedding function (sentence-transformers-like under the hood)
+        default_ef = embedding_functions.DefaultEmbeddingFunction()
+        _chroma_collection = _chroma_client.get_or_create_collection(
+            name="interview_sessions",
+            metadata={"description": "Resume, JD, and key answers per session"},
+            embedding_function=default_ef,
+        )
+    except Exception:
+        _chroma_client = None
+        _chroma_collection = None
+
+
+def _chroma_doc_id(session_id: str, doc_type: str, suffix: str = "0") -> str:
+    return f"{session_id}:{doc_type}:{suffix}"
+
+
+def index_session_docs(session_id: str, resume_text: str, jd_text: str):
+    """
+    Index resume and JD into Chroma for this session.
+    Safe to call even if Chroma is not available.
+    """
+    if _chroma_collection is None or not session_id:
+        return
+    if not (resume_text or jd_text):
+        return
+
+    def _chunk(text: str, chunk_size: int = 800, overlap: int = 200):
+        if not text:
+            return []
+        words = text.split()
+        chunks = []
+        start = 0
+        while start < len(words):
+            end = min(len(words), start + chunk_size)
+            chunk_words = words[start:end]
+            chunks.append(" ".join(chunk_words))
+            if end == len(words):
+                break
+            start = max(end - overlap, start + 1)
+        return chunks
+
+    documents = []
+    ids = []
+    metadatas = []
+
+    # Chunk resume
+    for idx, chunk in enumerate(_chunk(resume_text or "")):
+        documents.append(chunk)
+        ids.append(_chroma_doc_id(session_id, "resume", str(idx)))
+        metadatas.append(
+            {"session_id": session_id, "type": "resume", "chunk_index": idx}
+        )
+
+    # Chunk JD
+    for idx, chunk in enumerate(_chunk(jd_text or "")):
+        documents.append(chunk)
+        ids.append(_chroma_doc_id(session_id, "jd", str(idx)))
+        metadatas.append(
+            {"session_id": session_id, "type": "jd", "chunk_index": idx}
+        )
+
+    if not documents:
+        return
+
+    try:
+        _chroma_collection.upsert(
+            documents=documents, ids=ids, metadatas=metadatas
+        )
+    except Exception:
+        # Chroma is best-effort; don't break interview flow
+        pass
+
+
+def add_answer_to_index(session_id: str, answer_text: str, question_text: str, qa_index: int):
+    """
+    Optionally index important answers into Chroma so later questions can
+    reference what the candidate previously said.
+    """
+    if _chroma_collection is None or not session_id or not answer_text:
+        return
+
+    doc_id = _chroma_doc_id(session_id, "answer", str(qa_index))
+    metadata = {
+        "session_id": session_id,
+        "type": "answer",
+        "question": question_text,
+        "qa_index": qa_index,
+    }
+    try:
+        _chroma_collection.upsert(
+            documents=[answer_text],
+            ids=[doc_id],
+            metadatas=[metadata],
+        )
+    except Exception:
+        pass
+
+
+def build_retrieval_context(session_id: str, query: str, top_k: int = 4) -> str:
+    """
+    Query Chroma for this session and return a compact textual context
+    combining resume, JD, and relevant past answers.
+    """
+    if _chroma_collection is None or not session_id or not query:
+        return ""
+
+    try:
+        results = _chroma_collection.query(
+            query_texts=[query],
+            n_results=top_k,
+            where={"session_id": session_id},
+        )
+    except Exception:
+        return ""
+
+    docs = results.get("documents", [[]])[0] if results and results.get("documents") else []
+    metadatas = results.get("metadatas", [[]])[0] if results and results.get("metadatas") else []
+
+    if not docs:
+        return ""
+
+    snippets = []
+    for doc, meta in zip(docs, metadatas):
+        source_type = meta.get("type", "unknown")
+        if source_type == "resume":
+            idx = meta.get("chunk_index")
+            label = f"Resume (part {idx})" if idx is not None else "Resume"
+        elif source_type == "jd":
+            idx = meta.get("chunk_index")
+            label = f"Job Description (part {idx})" if idx is not None else "Job Description"
+        elif source_type == "answer":
+            idx = meta.get("qa_index")
+            label = f"Past Answer #{idx}" if idx is not None else "Past Answer"
+        else:
+            label = source_type
+        snippets.append(f"[{label}] {doc[:600]}")  # keep each snippet reasonably small
+
+    return "\n\n".join(snippets)
+
 
 # In-memory fallback session context (single-user). Redis-backed sessions are preferred when available.
 session_context = default_session_state()
@@ -444,6 +681,9 @@ def upload():
         state['selected_role'] = selected_role
         state['coding_round'] = None
 
+        # Index resume + JD into ChromaDB for semantic retrieval (best-effort)
+        index_session_docs(new_session_id, state['resume'], state['jd'])
+
         # Persist to Redis if available, otherwise fall back to in-memory globals
         if _redis_client is not None:
             save_session_state(new_session_id, state)
@@ -465,6 +705,7 @@ def upload():
 
 @app.route('/chat', methods=['POST'])
 def chat():
+    start_ts = time.time()
     data = request.json
     user_msg = data.get('message', '')
     history = data.get('history', [])
@@ -585,7 +826,7 @@ def chat():
         
         # Log the Q/A (this answer corresponds to the previously asked question)
         role_info = AVAILABLE_ROLES.get(state.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
-        state['qa_log'].append({
+        qa_entry = {
             "question_id": state['question_count'],
             "phase": state.get('interview_phase', 'Introduction'),
             "question": state.get('current_question', ''),
@@ -595,10 +836,48 @@ def chat():
             "is_edge_case": profile_data.get('persona') == 'edge_case' or not profile_data.get('is_relevant', True),
             "skills": infer_skills_from_question(state.get('current_question', ''), role_info),
             "timestamp_iso": datetime.datetime.now().isoformat(),
-        })
+        }
+        state['qa_log'].append(qa_entry)
+
+        # Also index this answer into ChromaDB so future questions can reference it
+        add_answer_to_index(
+            state.get("session_id"),
+            answer_text=user_msg,
+            question_text=qa_entry["question"],
+            qa_index=qa_entry["question_id"],
+        )
 
     # 3. GENERATE RESPONSE
     role_info = AVAILABLE_ROLES.get(state.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
+
+    # Build semantic retrieval context (resume, JD, and past answers) with lightweight caching
+    query_for_retrieval = user_msg or state.get("current_question", "")
+    retrieval_cache = state.get("retrieval_cache") or {}
+    retrieval_context = ""
+    cache_hit = False
+    if retrieval_cache:
+        cached_q = retrieval_cache.get("query")
+        cached_ctx = retrieval_cache.get("context")
+        cached_ts = retrieval_cache.get("ts")
+        try:
+            age = time.time() - float(cached_ts)
+        except Exception:
+            age = 9999
+        if cached_q == query_for_retrieval and age < 10:
+            retrieval_context = cached_ctx or ""
+            cache_hit = True
+
+    if not cache_hit:
+        retrieval_context = build_retrieval_context(
+            state.get("session_id"),
+            query=query_for_retrieval,
+        )
+        state["retrieval_cache"] = {
+            "query": query_for_retrieval,
+            "context": retrieval_context,
+            "ts": time.time(),
+        }
+
     raw_response = interviewer.generate_response(
         user_msg,
         history,
@@ -608,7 +887,8 @@ def chat():
         grader_data,
         state['interview_phase'],
         state['question_count'],
-        role_info
+        role_info,
+        retrieval_context=retrieval_context,
     )
 
     # Extract response text (remove analysis section for storage)
@@ -653,6 +933,24 @@ def chat():
 
     if _redis_client is not None and session_id:
         save_session_state(session_id, state)
+
+    elapsed_ms = int((time.time() - start_ts) * 1000)
+    try:
+        logger.info(
+            json.dumps(
+                {
+                    "event": "chat_turn",
+                    "session_id": state.get("session_id") or session_id,
+                    "elapsed_ms": elapsed_ms,
+                    "question_count": state.get("question_count"),
+                    "used_profiler": True,
+                    "used_grader": bool(grader_data),
+                    "phase": state.get("interview_phase"),
+                }
+            )
+        )
+    except Exception:
+        pass
 
     return jsonify({
         "response": raw_response,
@@ -733,35 +1031,41 @@ def get_feedback():
 @app.route('/reset', methods=['POST'])
 def reset():
     """Reset interview session."""
-    session_context['resume'] = ""
-    session_context['jd'] = ""
-    session_context['selected_role'] = ""
-    session_context['current_question'] = "Introduction"
-    session_context['interview_phase'] = "Introduction"
-    session_context['question_count'] = 0
-    session_context['all_scores'] = []
-    session_context['interview_history'] = []
-    session_context['qa_log'] = []
-    session_context['started'] = False
-    session_context['edge_cases_detected'] = []
-    session_context['red_flags_history'] = []
-    session_context['coding_round'] = None
-    
+    session_id = get_request_session_id()
+
+    # Redis-first: reset that specific session's state
+    if _redis_client is not None and session_id:
+        state = default_session_state()
+        state["session_id"] = session_id
+        save_session_state(session_id, state)
+        return jsonify({"status": "success", "message": "Session reset", "session_id": session_id})
+
+    # In-memory fallback (single-user)
+    session_context.clear()
+    session_context.update(default_session_state())
     return jsonify({"status": "success", "message": "Session reset"})
 
 
 @app.route('/export-transcript', methods=['GET'])
 def export_transcript():
     """Export transcript (JSON) for replay/download."""
+    session_id = get_request_session_id()
+    if _redis_client is not None and session_id:
+        state = load_session_state(session_id) or default_session_state()
+        state["session_id"] = state.get("session_id") or session_id
+    else:
+        state = session_context
+
     return jsonify({
         "status": "success",
-        "role": session_context.get("selected_role", ""),
-        "question_count": session_context.get("question_count", 0),
-        "qa_log": session_context.get("qa_log", []),
+        "session_id": state.get("session_id"),
+        "role": state.get("selected_role", ""),
+        "question_count": state.get("question_count", 0),
+        "qa_log": state.get("qa_log", []),
         "analytics": {
-            "scores": session_context.get("all_scores", []),
-            "skill_breakdown": compute_skill_breakdown(session_context.get("qa_log", [])),
-            "edge_cases_count": len(session_context.get("edge_cases_detected", [])),
+            "scores": state.get("all_scores", []),
+            "skill_breakdown": compute_skill_breakdown(state.get("qa_log", [])),
+            "edge_cases_count": len(state.get("edge_cases_detected", [])),
         },
     })
 
@@ -769,8 +1073,15 @@ def export_transcript():
 @app.route('/export-transcript-txt', methods=['GET'])
 def export_transcript_txt():
     """Export transcript as plain text."""
+    session_id = get_request_session_id()
+    if _redis_client is not None and session_id:
+        state = load_session_state(session_id) or default_session_state()
+        state["session_id"] = state.get("session_id") or session_id
+    else:
+        state = session_context
+
     lines = []
-    for entry in session_context.get("qa_log", []):
+    for entry in state.get("qa_log", []):
         qid = entry.get("question_id", "")
         phase = entry.get("phase", "")
         score = entry.get("score", "")
@@ -787,7 +1098,7 @@ def export_transcript_txt():
         BytesIO(content.encode("utf-8")),
         mimetype="text/plain",
         as_attachment=True,
-        download_name=f"interview-transcript-{datetime.datetime.now().strftime('%Y%m%d')}.txt",
+        download_name=f"interview-transcript-{(state.get('session_id') or 'session')}-{datetime.datetime.now().strftime('%Y%m%d')}.txt",
     )
 
 @app.route('/get-roles', methods=['GET'])
@@ -801,47 +1112,62 @@ def get_roles():
 def save_session():
     """Save current interview session."""
     try:
-        session_id = request.json.get('session_id') or f"session_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        data = request.json or {}
+        # The *active* interview session we snapshot from
+        source_session_id = data.get("source_session_id") or data.get("session_id") or get_request_session_id()
+
+        if _redis_client is not None and source_session_id:
+            state = load_session_state(source_session_id) or default_session_state()
+            state["session_id"] = state.get("session_id") or source_session_id
+        else:
+            state = session_context
+
+        # The *saved snapshot id*
+        saved_id = data.get("saved_session_id") or f"saved_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         session_data = {
-            "session_id": session_id,
+            "session_id": saved_id,
+            "source_session_id": state.get("session_id"),
             "timestamp": datetime.datetime.now().isoformat(),
-            "role": session_context.get('selected_role', ''),
-            "resume": session_context.get('resume', '')[:500],  # Store summary
-            "jd": session_context.get('jd', '')[:500],
-            "question_count": session_context.get('question_count', 0),
-            "all_scores": session_context.get('all_scores', []),
-            "average_score": sum(session_context.get('all_scores', [])) / len(session_context.get('all_scores', [])) if session_context.get('all_scores') else 0,
-            "interview_history": session_context.get('interview_history', [])[-50:],  # Last 50 messages
-            "edge_cases_count": len(session_context.get('edge_cases_detected', [])),
-            "duration": sum(session_context.get('question_times', [])) if session_context.get('question_times') else 0
+            "role": state.get('selected_role', ''),
+            "resume": (state.get('resume', '') or '')[:500],  # Store summary
+            "jd": (state.get('jd', '') or '')[:500],
+            "question_count": state.get('question_count', 0),
+            "all_scores": state.get('all_scores', []),
+            "average_score": sum(state.get('all_scores', [])) / len(state.get('all_scores', [])) if state.get('all_scores') else 0,
+            "interview_history": (state.get('interview_history', []) or [])[-50:],  # Last 50 messages
+            "edge_cases_count": len(state.get('edge_cases_detected', []) or []),
+            "duration": sum(state.get('question_times', []) or []) if state.get('question_times') else 0
         }
-        saved_sessions[session_id] = session_data
-        return jsonify({"status": "success", "session_id": session_id, "message": "Session saved successfully"})
+        save_saved_session(saved_id, session_data)
+        return jsonify({"status": "success", "session_id": saved_id, "message": "Session saved successfully"})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @app.route('/load-session/<session_id>', methods=['GET'])
 def load_session(session_id):
     """Load a saved interview session."""
-    if session_id in saved_sessions:
-        return jsonify({"status": "success", "session": saved_sessions[session_id]})
+    session = load_saved_session(session_id)
+    if session is not None:
+        return jsonify({"status": "success", "session": session})
     return jsonify({"status": "error", "message": "Session not found"}), 404
 
 @app.route('/list-sessions', methods=['GET'])
 def list_sessions():
     """List all saved sessions."""
+    sessions = list_saved_sessions()
     sessions_list = [
         {
-            "session_id": sid,
-            "timestamp": data.get('timestamp', ''),
-            "role": data.get('role', ''),
-            "question_count": data.get('question_count', 0),
-            "average_score": data.get('average_score', 0),
-            "duration": data.get('duration', 0)
+            "session_id": s.get("session_id", ""),
+            "timestamp": s.get("timestamp", ""),
+            "role": s.get("role", ""),
+            "question_count": s.get("question_count", 0),
+            "average_score": s.get("average_score", 0),
+            "duration": s.get("duration", 0),
+            "source_session_id": s.get("source_session_id", ""),
         }
-        for sid, data in saved_sessions.items()
+        for s in sessions
     ]
-    sessions_list.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+    sessions_list.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
     return jsonify({"status": "success", "sessions": sessions_list})
 
 @app.route('/export-pdf', methods=['POST'])
@@ -850,10 +1176,38 @@ def export_pdf():
     if not PDF_AVAILABLE:
         return jsonify({"status": "error", "message": "PDF export requires reportlab library. Install with: pip install reportlab"}), 500
     try:
-        data = request.json
+        data = request.json or {}
+        session_id = data.get("session_id") or get_request_session_id()
+
+        # Load session state (Redis-first) to fill defaults if caller omits them
+        if _redis_client is not None and session_id:
+            state = load_session_state(session_id) or default_session_state()
+            state["session_id"] = state.get("session_id") or session_id
+        else:
+            state = session_context
+
         feedback_text = data.get('feedback', '')
-        analytics = data.get('analytics', {})
-        role = data.get('role', 'Interview')
+        analytics = data.get('analytics', {}) or {}
+        role = data.get('role') or (AVAILABLE_ROLES.get(state.get("selected_role", ""), {}).get("name")) or 'Interview'
+
+        if not analytics:
+            analytics = {
+                "total_questions": state.get("question_count", 0),
+                "average_score": sum(state.get("all_scores", []) or []) / len(state.get("all_scores", []) or []) if state.get("all_scores") else 0,
+                "highest_score": max(state.get("all_scores", []) or []) if state.get("all_scores") else 0,
+                "lowest_score": min(state.get("all_scores", []) or []) if state.get("all_scores") else 0,
+                "edge_cases_count": len(state.get("edge_cases_detected", []) or []),
+            }
+
+        # If caller did not provide feedback, generate it from session state
+        if not feedback_text and state.get("question_count", 0) > 0:
+            feedback_text = feedback_generator.generate_comprehensive_feedback(
+                state.get('interview_history', []),
+                state.get('resume', ''),
+                state.get('jd', ''),
+                state.get('all_scores', []),
+                state.get('question_count', 0)
+            )
         
         # Create PDF
         buffer = BytesIO()
@@ -1085,10 +1439,19 @@ def generate_study_plan():
     """Generate a 7/14/30 day study plan based on performance."""
     try:
         data = request.json or {}
-        scores = data.get('scores') or session_context.get('all_scores', [])
+        session_id = data.get("session_id") or get_request_session_id()
+
+        # Load session state (Redis-first) if available, so this endpoint works without the UI sending analytics
+        if _redis_client is not None and session_id:
+            state = load_session_state(session_id) or default_session_state()
+            state["session_id"] = state.get("session_id") or session_id
+        else:
+            state = session_context
+
+        scores = data.get('scores') or state.get('all_scores', [])
         analytics = data.get('analytics') or {}
-        skill_breakdown = analytics.get('skill_breakdown') or compute_skill_breakdown(session_context.get('qa_log', []))
-        role = data.get('role') or session_context.get('selected_role', '')
+        skill_breakdown = analytics.get('skill_breakdown') or compute_skill_breakdown(state.get('qa_log', []))
+        role = data.get('role') or state.get('selected_role', '')
 
         avg_score = sum(scores) / len(scores) if scores else 0
 
@@ -1193,7 +1556,19 @@ def run_code():
     old_stdout = sys.stdout
     try:
         sys.stdout = buffer
-        exec(code, safe_globals, {})
+
+        # Build final source by wrapping user body inside the fixed function signature.
+        # This mimics LeetCode-style "boilerplate is fixed, body is user-editable".
+        if signature:
+            body = code.strip("\n")
+            if not body:
+                body = "pass"
+            indented = "\n".join("    " + line for line in body.splitlines())
+            final_source = f"{signature}\n{indented}\n"
+        else:
+            final_source = code
+
+        exec(final_source, safe_globals, {})
 
         # If no structured tests, just return stdout like a REPL
         if not tests or not signature:
@@ -1203,16 +1578,17 @@ def run_code():
         fn_name = signature.split("(")[0].replace("def", "").strip()
         fn = safe_globals.get(fn_name)
 
-        # If user didn't follow the template, just act like a normal REPL:
+        # If the expected function is not defined, return a clear error so the user can fix it.
         if not callable(fn):
-            output = buffer.getvalue() or (
-                "Code ran, but no testable function was found.\n"
-                f"If you want auto‑tests, define `{signature}` at top-level."
-            )
             return jsonify({
-                "status": "success",
-                "output": output,
-            })
+                "status": "error",
+                "output": buffer.getvalue(),
+                "message": (
+                    f"Expected a function `{signature}`.\n"
+                    "Please write your solution inside that function's body and do not change "
+                    "the function name or its parameters."
+                ),
+            }), 400
 
         results = []
         passed_count = 0

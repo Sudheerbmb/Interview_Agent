@@ -4,7 +4,19 @@ class InterviewerAgent:
     def __init__(self, client):
         self.client = client
 
-    def generate_response(self, user_input, history, resume, jd, profiler_data, grader_data, interview_phase=None, question_count=0, role_info=None):
+    def generate_response(
+        self,
+        user_input,
+        history,
+        resume,
+        jd,
+        profiler_data,
+        grader_data,
+        interview_phase=None,
+        question_count=0,
+        role_info=None,
+        retrieval_context: str | None = None,
+    ):
         # Extract full context from resume and JD
         resume_summary = resume[:1500] if len(resume) > 1500 else resume
         jd_summary = jd[:1500] if len(jd) > 1500 else jd
@@ -50,6 +62,9 @@ comprehensive assessment standards.
 
 **Target Role (Job Description):**
 {jd_summary}
+
+**Retrieved Relevant Context (from resume, JD, and past answers):**
+{retrieval_context if retrieval_context else "None"}
 
 **Interview State:**
 - Current Phase: {interview_phase}
