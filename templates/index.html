@@ -201,6 +201,7 @@
         // --- GLOBAL STATE ---
 
         let history = [];
+        let currentSessionId = null;
 
         let silenceTimer;
 
@@ -679,7 +680,7 @@
             height: 100%; 
             margin: 0; 
             padding: 0; 
-            overflow: hidden;
+            overflow: auto;
         }
         body { 
             background-color: #0f1115; 
@@ -811,9 +812,18 @@
             margin: 0.75rem 0;
             line-height: 1.7;
         }
+
+        /* Small-height screens: keep setup card usable */
+        @media (max-height: 700px) {
+            #setup-screen {
+                justify-content: flex-start;
+                padding-top: 1rem;
+                padding-bottom: 1rem;
+            }
+        }
     </style>
 </head>
-<body class="h-screen flex flex-col font-sans overflow-hidden bg-[#0f1115]">
+<body class="h-screen flex flex-col font-sans bg-[#0f1115]">
 
     <nav class="border-b border-gray-800 p-4 flex justify-between items-center bg-[#0f1115] z-10 flex-shrink-0">
         <div class="flex items-center gap-2">
@@ -838,8 +848,8 @@
         </div>
     </nav>
 
-    <div id="setup-screen" class="flex-1 flex flex-col items-center justify-center p-6 overflow-y-auto">
-        <div class="w-full max-w-xl glass-panel p-8 rounded-2xl shadow-2xl animate-fade-in-up">
+    <div id="setup-screen" class="flex-1 min-h-0 flex flex-col items-center justify-center p-4 sm:p-6 overflow-y-auto">
+        <div class="w-full max-w-xl glass-panel p-6 sm:p-8 rounded-2xl shadow-2xl animate-fade-in-up max-h-[calc(100vh-7rem)] overflow-y-auto">
             <h2 class="text-2xl font-bold mb-2">Configure Session</h2>
             <p class="text-gray-400 mb-6 text-sm">Upload candidate profile (PDF) and target role to initialize the Multi-Agent System.</p>
 
@@ -1127,6 +1137,7 @@
             showHints: true
         };
 
+
         // --- 1. SETUP LOGIC ---
         document.getElementById('upload-form').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -1150,6 +1161,7 @@
                 const data = await res.json();
                 
                 if(data.status === 'success') {
+                    currentSessionId = data.session_id || currentSessionId;
                     document.getElementById('setup-screen').classList.add('hidden');
                     document.getElementById('chat-screen').classList.remove('hidden');
                     document.getElementById('chat-screen').classList.add('flex');
@@ -1211,7 +1223,7 @@
                 const res = await fetch('/chat', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ message: msg, history: history })
+                    body: JSON.stringify({ message: msg, history: history, session_id: currentSessionId })
                 });
                 
                 const data = await res.json();
@@ -1796,7 +1808,8 @@
                     body: JSON.stringify({
                         scores: scoreHistory,
                         analytics: analyticsData,
-                        role: document.getElementById('role-select')?.value || ''
+                        role: document.getElementById('role-select')?.value || '',
+                        session_id: currentSessionId
                     })
                 });
                 const data = await res.json();
@@ -1836,7 +1849,11 @@
 
         async function exportFeedback() {
             try {
-                const res = await fetch('/get-feedback', { method: 'POST' });
+                const res = await fetch('/get-feedback', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ session_id: currentSessionId })
+                });
                 const data = await res.json();
                 
                 if (data.feedback) {
@@ -2054,7 +2071,7 @@
                 const res = await fetch('/run-code', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ language, code })
+                    body: JSON.stringify({ language, code, session_id: currentSessionId })
                 });
                 const data = await res.json();
                 if (data.status === 'success') {
@@ -2079,7 +2096,7 @@
         // Coding round start + submit
         async function startCodingRound() {
             try {
-                const res = await fetch('/start-coding-round');
+                const res = await fetch(`/start-coding-round?session_id=${encodeURIComponent(currentSessionId || '')}`);
                 const data = await res.json();
                 if (data.status !== 'success') {
                     alert(data.message || 'Failed to start coding round.');
@@ -2135,7 +2152,7 @@
                 const res = await fetch('/submit-coding-round', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ code, language })
+                    body: JSON.stringify({ code, language, session_id: currentSessionId })
                 });
                 const data = await res.json();
                 if (data.status !== 'success') {

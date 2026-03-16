@@ -1,6 +1,7 @@
 #
 import os
 import random
+import uuid
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
 from groq import Groq
@@ -12,6 +13,12 @@ import json
 import datetime
 import io
 import sys
+from typing import Optional
+
+try:
+    import redis
+except Exception:
+    redis = None
 
 # Optional PDF export (requires reportlab)
 try:
@@ -38,32 +45,80 @@ CORS(app)
 
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
+# ---- Redis (optional) ----
+# If Redis is available, we store per-session state in Redis using session_id.
+# If Redis is not available, we fall back to the original in-memory globals.
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", "21600"))  # 6 hours
+
+_redis_client = None
+if redis is not None:
+    try:
+        _redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+        _redis_client.ping()
+    except Exception:
+        _redis_client = None
+
+
+def _redis_key_session(session_id: str) -> str:
+    return f"insight:session:{session_id}"
+
+
+def _redis_key_saved(session_id: str) -> str:
+    return f"insight:saved_session:{session_id}"
+
+
+def get_request_session_id() -> Optional[str]:
+    data = request.json if request.is_json else None
+    if isinstance(data, dict) and data.get("session_id"):
+        return data.get("session_id")
+    if request.args.get("session_id"):
+        return request.args.get("session_id")
+    return request.headers.get("X-Session-Id")
+
+
+def load_session_state(session_id: str):
+    if _redis_client is None:
+        return None
+    raw = _redis_client.get(_redis_key_session(session_id))
+    return json.loads(raw) if raw else None
+
+
+def save_session_state(session_id: str, state: dict):
+    if _redis_client is None:
+        return
+    _redis_client.setex(_redis_key_session(session_id), SESSION_TTL_SECONDS, json.dumps(state))
+
+
+def default_session_state():
+    # Keep shape aligned with the old global session_context
+    return {
+        "resume": "",
+        "jd": "",
+        "selected_role": "",
+        "current_question": "Introduction",
+        "interview_phase": "Introduction",
+        "question_count": 0,
+        "all_scores": [],
+        "interview_history": [],
+        "qa_log": [],
+        "started": False,
+        "edge_cases_detected": [],
+        "red_flags_history": [],
+        "start_time": None,
+        "question_times": [],
+        "session_id": None,
+        "coding_round": None,
+    }
+
 # Initialize all agents
 profiler = ProfilerAgent(client)
 grader = GraderAgent(client)
 interviewer = InterviewerAgent(client)
 feedback_generator = FeedbackGeneratorAgent(client)
 
-# Enhanced session context with state tracking
-session_context = {
-    "resume": "",
-    "jd": "",
-    "selected_role": "",
-    "current_question": "Introduction",
-    "interview_phase": "Introduction",
-    "question_count": 0,
-    "all_scores": [],
-    "interview_history": [],
-    # Structured Q/A log for analytics + transcript export
-    # Each entry: {question_id, phase, question, answer, score, persona, is_edge_case, timestamp_iso}
-    "qa_log": [],
-    "started": False,
-    "edge_cases_detected": [],
-    "red_flags_history": [],
-    "start_time": None,
-    "question_times": [],
-    "session_id": None
-}
+# In-memory fallback session context (single-user). Redis-backed sessions are preferred when available.
+session_context = default_session_state()
 
 # In-memory session storage (in production, use database)
 saved_sessions = {}
@@ -380,25 +435,29 @@ def upload():
     selected_role = request.form.get('role', 'software_engineer')
     
     if resume and jd:
-        session_context['resume'] = extract_pdf(resume)
-        session_context['jd'] = jd
-        session_context['selected_role'] = selected_role
-        session_context['question_count'] = 0
-        session_context['all_scores'] = []
-        session_context['interview_history'] = []
-        session_context['qa_log'] = []
-        session_context['started'] = False
-        session_context['interview_phase'] = "Introduction"
-        session_context['edge_cases_detected'] = []
-        session_context['red_flags_history'] = []
-        session_context['coding_round'] = None
+        # Create a new session id and initialize state
+        new_session_id = str(uuid.uuid4())
+        state = default_session_state()
+        state['session_id'] = new_session_id
+        state['resume'] = extract_pdf(resume)
+        state['jd'] = jd
+        state['selected_role'] = selected_role
+        state['coding_round'] = None
+
+        # Persist to Redis if available, otherwise fall back to in-memory globals
+        if _redis_client is not None:
+            save_session_state(new_session_id, state)
+        else:
+            session_context.clear()
+            session_context.update(state)
         
         role_info = AVAILABLE_ROLES.get(selected_role, AVAILABLE_ROLES['software_engineer'])
         
         return jsonify({
             "status": "success",
             "message": f"Byte is ready for {role_info['name']} interview. Let's begin!",
-            "role": role_info['name']
+            "role": role_info['name'],
+            "session_id": new_session_id
         })
     
     return jsonify({"error": "Missing inputs"}), 400
@@ -409,34 +468,44 @@ def chat():
     data = request.json
     user_msg = data.get('message', '')
     history = data.get('history', [])
+    session_id = data.get('session_id') or get_request_session_id()
+
+    # Load per-session state (Redis preferred)
+    if _redis_client is not None and session_id:
+        state = load_session_state(session_id)
+        if state is None:
+            state = default_session_state()
+            state["session_id"] = session_id
+    else:
+        state = session_context
 
     # Check if interview should end
-    should_end = check_interview_end(user_msg, session_context['question_count'])
+    should_end = check_interview_end(user_msg, state['question_count'])
     
-    if should_end and session_context['question_count'] > 0:
+    if should_end and state['question_count'] > 0:
         # Generate comprehensive feedback
         feedback = feedback_generator.generate_comprehensive_feedback(
-            session_context['interview_history'],
-            session_context['resume'],
-            session_context['jd'],
-            session_context['all_scores'],
-            session_context['question_count']
+            state['interview_history'],
+            state['resume'],
+            state['jd'],
+            state['all_scores'],
+            state['question_count']
         )
         
         # Add edge cases and red flags summary to feedback
         edge_cases_summary = ""
-        if session_context['edge_cases_detected']:
-            edge_cases_summary = f"\n\n## Edge Cases Detected ({len(session_context['edge_cases_detected'])})\n"
+        if state['edge_cases_detected']:
+            edge_cases_summary = f"\n\n## Edge Cases Detected ({len(state['edge_cases_detected'])})\n"
             edge_cases_summary += "The following off-topic questions were detected and handled:\n"
-            for i, ec in enumerate(session_context['edge_cases_detected'], 1):
+            for i, ec in enumerate(state['edge_cases_detected'], 1):
                 edge_cases_summary += f"{i}. {ec['question']}\n"
         
         red_flags_summary = ""
-        if session_context.get('red_flags_history'):
-            red_flags_summary = f"\n\n## Red Flags & Critical Issues Detected ({len(session_context['red_flags_history'])})\n"
+        if state.get('red_flags_history'):
+            red_flags_summary = f"\n\n## Red Flags & Critical Issues Detected ({len(state['red_flags_history'])})\n"
             red_flags_summary += "The following issues were identified during the interview:\n"
-            memorization_count = sum(1 for rf in session_context['red_flags_history'] if rf.get('memorization_detected'))
-            knowledge_gaps_count = sum(1 for rf in session_context['red_flags_history'] if rf.get('knowledge_gaps'))
+            memorization_count = sum(1 for rf in state['red_flags_history'] if rf.get('memorization_detected'))
+            knowledge_gaps_count = sum(1 for rf in state['red_flags_history'] if rf.get('knowledge_gaps'))
             
             if memorization_count > 0:
                 red_flags_summary += f"- **Memorization Detected**: {memorization_count} instances where answers appeared memorized rather than understood\n"
@@ -444,33 +513,36 @@ def chat():
                 red_flags_summary += f"- **Knowledge Gaps**: {knowledge_gaps_count} instances where significant knowledge gaps were identified\n"
             
             all_red_flags = []
-            for rf in session_context['red_flags_history']:
+            for rf in state['red_flags_history']:
                 all_red_flags.extend(rf.get('red_flags', []))
             if all_red_flags:
                 red_flags_summary += f"- **Specific Red Flags**: {', '.join(set(all_red_flags[:10]))}\n"
         
         feedback = feedback + edge_cases_summary + red_flags_summary
+
+        if _redis_client is not None and session_id:
+            save_session_state(session_id, state)
         
         return jsonify({
             "response": feedback,
             "interview_complete": True,
             "analytics": {
-                "total_questions": session_context['question_count'],
-                "average_score": sum(session_context['all_scores']) / len(session_context['all_scores']) if session_context['all_scores'] else 0,
-                "highest_score": max(session_context['all_scores']) if session_context['all_scores'] else 0,
-                "lowest_score": min(session_context['all_scores']) if session_context['all_scores'] else 0,
-                "edge_cases_count": len(session_context['edge_cases_detected'])
+                "total_questions": state['question_count'],
+                "average_score": sum(state['all_scores']) / len(state['all_scores']) if state['all_scores'] else 0,
+                "highest_score": max(state['all_scores']) if state['all_scores'] else 0,
+                "lowest_score": min(state['all_scores']) if state['all_scores'] else 0,
+                "edge_cases_count": len(state['edge_cases_detected'])
             },
             "debug": {
                 "persona": "feedback",
                 "phase": "Feedback",
-                "edge_cases_detected": len(session_context['edge_cases_detected'])
+                "edge_cases_detected": len(state['edge_cases_detected'])
             }
         })
 
     # Update interview history
     if user_msg and user_msg != "[SYSTEM_TIMEOUT]":
-        session_context['interview_history'].append({"role": "user", "content": user_msg})
+        state['interview_history'].append({"role": "user", "content": user_msg})
 
     # 1. PROFILE THE USER
     profile_data = profiler.analyze(user_msg, history)
@@ -480,16 +552,16 @@ def chat():
         edge_case_entry = {
             "question": user_msg[:200],
             "persona": profile_data.get('persona', 'edge_case'),
-            "timestamp": len(session_context['interview_history']),
+            "timestamp": len(state['interview_history']),
             "red_flags": profile_data.get('red_flags', [])
         }
-        session_context['edge_cases_detected'].append(edge_case_entry)
+        state['edge_cases_detected'].append(edge_case_entry)
     
     # Track red flags and memorization issues
     if profile_data.get('memorization_detected') or profile_data.get('red_flags'):
-        if 'red_flags_history' not in session_context:
-            session_context['red_flags_history'] = []
-        session_context['red_flags_history'].append({
+        if 'red_flags_history' not in state:
+            state['red_flags_history'] = []
+        state['red_flags_history'].append({
             "question": user_msg[:200],
             "memorization_detected": profile_data.get('memorization_detected', False),
             "red_flags": profile_data.get('red_flags', []),
@@ -498,44 +570,44 @@ def chat():
 
     # 2. GRADE THE ANSWER (Only if relevant & not silent)
     grader_data = {}
-    if profile_data['is_relevant'] and profile_data['persona'] != 'silent' and session_context['started']:
+    if profile_data['is_relevant'] and profile_data['persona'] != 'silent' and state['started']:
         grader_data = grader.evaluate(
             user_msg,
-            session_context['current_question'],
-            session_context['jd'],
-            session_context['resume'],
-            session_context['all_scores']  # Pass previous scores for trend analysis
+            state['current_question'],
+            state['jd'],
+            state['resume'],
+            state['all_scores']  # Pass previous scores for trend analysis
         )
         
         # Store score
         if 'score' in grader_data:
-            session_context['all_scores'].append(grader_data['score'])
+            state['all_scores'].append(grader_data['score'])
         
         # Log the Q/A (this answer corresponds to the previously asked question)
-        role_info = AVAILABLE_ROLES.get(session_context.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
-        session_context['qa_log'].append({
-            "question_id": session_context['question_count'],
-            "phase": session_context.get('interview_phase', 'Introduction'),
-            "question": session_context.get('current_question', ''),
+        role_info = AVAILABLE_ROLES.get(state.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
+        state['qa_log'].append({
+            "question_id": state['question_count'],
+            "phase": state.get('interview_phase', 'Introduction'),
+            "question": state.get('current_question', ''),
             "answer": user_msg,
             "score": grader_data.get('score'),
             "persona": profile_data.get('persona', 'normal'),
             "is_edge_case": profile_data.get('persona') == 'edge_case' or not profile_data.get('is_relevant', True),
-            "skills": infer_skills_from_question(session_context.get('current_question', ''), role_info),
+            "skills": infer_skills_from_question(state.get('current_question', ''), role_info),
             "timestamp_iso": datetime.datetime.now().isoformat(),
         })
 
     # 3. GENERATE RESPONSE
-    role_info = AVAILABLE_ROLES.get(session_context.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
+    role_info = AVAILABLE_ROLES.get(state.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
     raw_response = interviewer.generate_response(
         user_msg,
         history,
-        session_context['resume'],
-        session_context['jd'],
+        state['resume'],
+        state['jd'],
         profile_data,
         grader_data,
-        session_context['interview_phase'],
-        session_context['question_count'],
+        state['interview_phase'],
+        state['question_count'],
         role_info
     )
 
@@ -545,39 +617,42 @@ def chat():
         response_text = raw_response.split("[RESPONSE]")[-1].strip()
     
     # Update interview state
-    if session_context['started'] or (user_msg and user_msg != "[SYSTEM_TIMEOUT]"):
-        session_context['started'] = True
+    if state['started'] or (user_msg and user_msg != "[SYSTEM_TIMEOUT]"):
+        state['started'] = True
         # Increment question count if this is a new question (not a follow-up)
         if profile_data.get('persona') != 'silent' and not grader_data.get('requires_followup', False):
-            session_context['question_count'] += 1
-            session_context['interview_phase'] = determine_interview_phase(session_context['question_count'])
+            state['question_count'] += 1
+            state['interview_phase'] = determine_interview_phase(state['question_count'])
     
     # Store current question for next turn's context
-    session_context['current_question'] = response_text[:200]
+    state['current_question'] = response_text[:200]
     
     # Update interview history
-    session_context['interview_history'].append({"role": "assistant", "content": raw_response})
+    state['interview_history'].append({"role": "assistant", "content": raw_response})
 
     # Enhanced debug information
     # Always compute analytics so the dashboard can update every question
     analytics = {
-        "total_questions": session_context['question_count'],
-        "scores": session_context['all_scores'],
+        "total_questions": state['question_count'],
+        "scores": state['all_scores'],
         "average_score": (
-            sum(session_context['all_scores']) / len(session_context['all_scores'])
-            if session_context['all_scores'] else 0
+            sum(state['all_scores']) / len(state['all_scores'])
+            if state['all_scores'] else 0
         ),
-        "highest_score": max(session_context['all_scores']) if session_context['all_scores'] else 0,
-        "lowest_score": min(session_context['all_scores']) if session_context['all_scores'] else 0,
-        "edge_cases_count": len(session_context['edge_cases_detected']),
+        "highest_score": max(state['all_scores']) if state['all_scores'] else 0,
+        "lowest_score": min(state['all_scores']) if state['all_scores'] else 0,
+        "edge_cases_count": len(state['edge_cases_detected']),
         "trend": (
             "improving"
-            if len(session_context['all_scores']) > 1
-            and session_context['all_scores'][-1] > session_context['all_scores'][0]
+            if len(state['all_scores']) > 1
+            and state['all_scores'][-1] > state['all_scores'][0]
             else "stable"
-        ) if session_context['all_scores'] else "baseline",
-        "skill_breakdown": compute_skill_breakdown(session_context.get('qa_log', [])),
+        ) if state['all_scores'] else "baseline",
+        "skill_breakdown": compute_skill_breakdown(state.get('qa_log', [])),
     }
+
+    if _redis_client is not None and session_id:
+        save_session_state(session_id, state)
 
     return jsonify({
         "response": raw_response,
@@ -591,13 +666,13 @@ def chat():
             "persona": profile_data.get('persona', 'normal'),
             "score": grader_data.get('score', 'N/A'),
             "follow_up": grader_data.get('requires_followup', False),
-            "phase": session_context['interview_phase'],
-            "question_count": session_context['question_count'],
-            "average_score": analytics["average_score"] if session_context['all_scores'] else 'N/A',
+            "phase": state['interview_phase'],
+            "question_count": state['question_count'],
+            "average_score": analytics["average_score"] if state['all_scores'] else 'N/A',
             "confidence": profile_data.get('confidence', 'medium'),
             "communication_quality": profile_data.get('communication_quality', 'good'),
             "is_edge_case": profile_data.get('persona') == 'edge_case' or not profile_data.get('is_relevant', True),
-            "edge_cases_count": len(session_context['edge_cases_detected']),
+            "edge_cases_count": len(state['edge_cases_detected']),
             "memorization_detected": profile_data.get('memorization_detected', False) or grader_data.get('memorization_detected', False),
             "red_flags": profile_data.get('red_flags', []) + grader_data.get('red_flags', []),
             "knowledge_gaps": profile_data.get('knowledge_gaps_detected', False),
@@ -611,39 +686,46 @@ def chat():
 @app.route('/get-feedback', methods=['POST'])
 def get_feedback():
     """Explicit endpoint to generate feedback at any time."""
-    if session_context['question_count'] == 0:
+    session_id = get_request_session_id()
+    if _redis_client is not None and session_id:
+        state = load_session_state(session_id) or default_session_state()
+        state["session_id"] = state.get("session_id") or session_id
+    else:
+        state = session_context
+
+    if state['question_count'] == 0:
         return jsonify({"error": "No interview conducted yet"}), 400
     
     feedback = feedback_generator.generate_comprehensive_feedback(
-        session_context['interview_history'],
-        session_context['resume'],
-        session_context['jd'],
-        session_context['all_scores'],
-        session_context['question_count']
+        state['interview_history'],
+        state['resume'],
+        state['jd'],
+        state['all_scores'],
+        state['question_count']
     )
     
     # Add edge cases summary to feedback
-    if session_context['edge_cases_detected']:
-        edge_cases_summary = f"\n\n## Edge Cases Detected ({len(session_context['edge_cases_detected'])})\n"
+    if state['edge_cases_detected']:
+        edge_cases_summary = f"\n\n## Edge Cases Detected ({len(state['edge_cases_detected'])})\n"
         edge_cases_summary += "The following off-topic questions were detected and handled:\n"
-        for i, ec in enumerate(session_context['edge_cases_detected'], 1):
+        for i, ec in enumerate(state['edge_cases_detected'], 1):
             edge_cases_summary += f"{i}. {ec['question']}\n"
         feedback = feedback + edge_cases_summary
     
     return jsonify({
         "feedback": feedback,
         "analytics": {
-            "total_questions": session_context['question_count'],
-            "average_score": sum(session_context['all_scores']) / len(session_context['all_scores']) if session_context['all_scores'] else 0,
-            "highest_score": max(session_context['all_scores']) if session_context['all_scores'] else 0,
-            "lowest_score": min(session_context['all_scores']) if session_context['all_scores'] else 0,
+            "total_questions": state['question_count'],
+            "average_score": sum(state['all_scores']) / len(state['all_scores']) if state['all_scores'] else 0,
+            "highest_score": max(state['all_scores']) if state['all_scores'] else 0,
+            "lowest_score": min(state['all_scores']) if state['all_scores'] else 0,
             "score_distribution": {
-                "excellent": len([s for s in session_context['all_scores'] if s >= 90]),
-                "good": len([s for s in session_context['all_scores'] if 70 <= s < 90]),
-                "satisfactory": len([s for s in session_context['all_scores'] if 50 <= s < 70]),
-                "needs_improvement": len([s for s in session_context['all_scores'] if s < 50])
+                "excellent": len([s for s in state['all_scores'] if s >= 90]),
+                "good": len([s for s in state['all_scores'] if 70 <= s < 90]),
+                "satisfactory": len([s for s in state['all_scores'] if 50 <= s < 70]),
+                "needs_improvement": len([s for s in state['all_scores'] if s < 50])
             },
-            "edge_cases_count": len(session_context['edge_cases_detected'])
+            "edge_cases_count": len(state['edge_cases_detected'])
         }
     })
 
@@ -917,16 +999,25 @@ Generate 5-7 specific, actionable learning resources (courses, books, practice p
 @app.route('/start-coding-round', methods=['GET'])
 def start_coding_round():
     """Return a coding question based on selected role to start the interview."""
-    role_key = session_context.get('selected_role', 'software_engineer')
+    session_id = get_request_session_id()
+    if _redis_client is not None and session_id:
+        state = load_session_state(session_id) or default_session_state()
+        state["session_id"] = state.get("session_id") or session_id
+    else:
+        state = session_context
+
+    role_key = state.get('selected_role', 'software_engineer')
     category, question = pick_coding_question(role_key)
     if question is None:
         return jsonify({"status": "error", "message": "No coding questions available."}), 500
 
-    session_context['coding_round'] = {
+    state['coding_round'] = {
         "category": category,
         "question": question,
         "started_at": datetime.datetime.now().isoformat(),
     }
+    if _redis_client is not None and session_id:
+        save_session_state(session_id, state)
 
     return jsonify({
         "status": "success",
@@ -938,19 +1029,26 @@ def start_coding_round():
 @app.route('/submit-coding-round', methods=['POST'])
 def submit_coding_round():
     """Capture coding solution and return an explanation question to start the interview."""
-    if not session_context.get('coding_round'):
+    session_id = get_request_session_id()
+    if _redis_client is not None and session_id:
+        state = load_session_state(session_id) or default_session_state()
+        state["session_id"] = state.get("session_id") or session_id
+    else:
+        state = session_context
+
+    if not state.get('coding_round'):
         return jsonify({"status": "error", "message": "No active coding round."}), 400
 
     data = request.json or {}
     code = data.get("code") or ""
     language = (data.get("language") or "python").lower()
-    coding = session_context['coding_round']
+    coding = state['coding_round']
     q = coding.get("question", {})
 
     # Log coding round as a QA entry without a numeric score
     role_info = AVAILABLE_ROLES.get(session_context.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
     skills = infer_skills_from_question(q.get("title", "") + " " + q.get("prompt", ""), role_info)
-    session_context['qa_log'].append({
+    state['qa_log'].append({
         "question_id": "coding_round",
         "phase": "Coding",
         "question": f"{q.get('title', '')}: {q.get('prompt', '')}",
@@ -970,9 +1068,12 @@ def submit_coding_round():
         f"and the time and space complexity of your solution."
     )
 
-    session_context['current_question'] = explanation_question
-    session_context['interview_phase'] = "Technical"
-    session_context['started'] = True
+    # Apply changes to per-session state
+    state['current_question'] = explanation_question
+    state['interview_phase'] = "Technical"
+    state['started'] = True
+    if _redis_client is not None and session_id:
+        save_session_state(session_id, state)
 
     return jsonify({
         "status": "success",
@@ -1063,7 +1164,14 @@ def run_code():
         })
 
     # If we have an active coding_round with Python tests, run them and report pass/fail
-    coding = session_context.get("coding_round") or {}
+    session_id = get_request_session_id()
+    if _redis_client is not None and session_id:
+        state = load_session_state(session_id) or default_session_state()
+        state["session_id"] = state.get("session_id") or session_id
+    else:
+        state = session_context
+
+    coding = state.get("coding_round") or {}
     question = coding.get("question") or {}
     tests = question.get("python_tests") or []
     signature = question.get("python_signature")
@@ -1094,12 +1202,17 @@ def run_code():
 
         fn_name = signature.split("(")[0].replace("def", "").strip()
         fn = safe_globals.get(fn_name)
+
+        # If user didn't follow the template, just act like a normal REPL:
         if not callable(fn):
+            output = buffer.getvalue() or (
+                "Code ran, but no testable function was found.\n"
+                f"If you want auto‑tests, define `{signature}` at top-level."
+            )
             return jsonify({
-                "status": "error",
-                "output": buffer.getvalue(),
-                "message": f"Function {fn_name} is not defined correctly. Please keep the signature as: {signature}"
-            }), 400
+                "status": "success",
+                "output": output,
+            })
 
         results = []
         passed_count = 0
