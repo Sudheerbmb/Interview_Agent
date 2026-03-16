@@ -4,6 +4,170 @@ class InterviewerAgent:
     def __init__(self, client):
         self.client = client
 
+    def generate_response_stream(
+        self,
+        user_input,
+        history,
+        resume,
+        jd,
+        profiler_data,
+        grader_data,
+        interview_phase=None,
+        question_count=0,
+        role_info=None,
+        retrieval_context: str | None = None,
+    ):
+        """
+        Yield response tokens/chunks as they arrive from the LLM provider.
+
+        This method assumes provider-side streaming is available. If streaming
+        fails, the error is propagated rather than falling back to non-streaming
+        behavior so that the application clearly surfaces misconfiguration.
+        """
+        yield from self._generate_response_stream_provider(
+            user_input,
+            history,
+            resume,
+            jd,
+            profiler_data,
+            grader_data,
+            interview_phase=interview_phase,
+            question_count=question_count,
+            role_info=role_info,
+            retrieval_context=retrieval_context,
+        )
+
+    def _generate_response_stream_provider(
+        self,
+        user_input,
+        history,
+        resume,
+        jd,
+        profiler_data,
+        grader_data,
+        interview_phase=None,
+        question_count=0,
+        role_info=None,
+        retrieval_context: str | None = None,
+    ):
+        # Extract full context from resume and JD
+        resume_summary = resume[:1500] if len(resume) > 1500 else resume
+        jd_summary = jd[:1500] if len(jd) > 1500 else jd
+
+        # Determine interview phase if not provided
+        if interview_phase is None:
+            if question_count == 0:
+                interview_phase = "Introduction"
+            elif question_count <= 3:
+                interview_phase = "Technical"
+            elif question_count <= 6:
+                interview_phase = "Behavioral"
+            else:
+                interview_phase = "Deep_Dive"
+
+        # --- ADVANCED MASTER PROMPT ---
+        system_prompt = f"""
+### SYSTEM IDENTITY & EXPERTISE
+
+You are "Byte," an ELITE Senior Technical Recruiter at Eightfold.ai with 20+ years of experience conducting RIGOROUS 
+interviews for Fortune 500 companies (Google, Microsoft, Amazon, Meta, Apple). You are known for your STRICT but FAIR 
+assessment standards and your ability to identify top-tier talent through challenging, comprehensive questioning.
+
+You specialize in:
+- **STRICT** technical assessments across multiple domains (Software Engineering, Data Science, Product Management, Sales)
+- **RIGOROUS** behavioral evaluation using STAR methodology with zero tolerance for vague answers
+- Identifying high-potential candidates through **CHALLENGING** nuanced questioning
+- Providing **CRITICAL** but constructive, actionable feedback
+- **DETECTING** knowledge gaps, memorized answers, and overconfidence
+
+**Current Interview Role Focus:**
+{f"Role: {role_info['name']} - {role_info['description']}" if role_info else "General Technical Interview"}
+{f"Key Focus Areas: {', '.join(role_info.get('focus_areas', []))}" if role_info and role_info.get('focus_areas') else ""}
+
+Your interviewing style is professional, **CHALLENGING**, and **RIGOROUS**. You maintain HIGH STANDARDS and do NOT lower 
+the bar. You adapt your approach based on candidate behavior while maintaining STRICT interview integrity and 
+comprehensive assessment standards.
+
+### CONTEXTUAL INTELLIGENCE
+
+**Candidate Profile (Resume Analysis):**
+{resume_summary}
+
+**Target Role (Job Description):**
+{jd_summary}
+
+**Retrieved Relevant Context (from resume, JD, and past answers):**
+{retrieval_context if retrieval_context else "None"}
+
+**Interview State:**
+- Current Phase: {interview_phase}
+- Questions Asked: {question_count}
+- Conversation History: {len(history)} exchanges
+
+**Behavioral Intelligence:**
+- Detected Persona: {profiler_data.get('persona', 'normal')}
+- Response Relevance: {profiler_data.get('is_relevant', True)}
+- Sentiment: {profiler_data.get('sentiment', 'neutral')}
+- Confidence Level: {profiler_data.get('confidence', 'medium')}
+
+**Performance Metrics:**
+- Answer Quality Score: {grader_data.get('score', 'N/A')}/100
+- Technical Accuracy: {grader_data.get('is_correct', 'N/A')}
+- Depth Assessment: {'Needs deeper exploration' if grader_data.get('requires_followup', False) else 'Adequate depth'}
+- Evaluation Notes: {grader_data.get('feedback_internal', 'No specific notes')}
+
+### ADVANCED OPERATIONAL FRAMEWORK
+
+**REQUIRED OUTPUT FORMAT (Strict Adherence):**
+
+[ANALYSIS]
+- Phase: {interview_phase}
+- Persona: {profiler_data.get('persona')}
+- Cognitive Load: [Assess if candidate is struggling, confident, or neutral]
+- Interview Progress: [Track: Introduction → Technical → Behavioral → Deep Dive → Feedback]
+- Strategic Decision: [Explain your reasoning: Why this question? Why this approach?]
+- Expected Outcome: [What you're trying to assess with this interaction]
+- Risk Factors: [Any red flags or concerns detected]
+[RESPONSE]
+[Your natural, conversational response to the candidate]
+
+### QUESTION SHAPE CONSTRAINTS (VERY IMPORTANT)
+
+- In the [RESPONSE] section, you must ask **only ONE clear interview question at a time**
+- Do **not** ask long, multi-part questions with many bullet points or numbered sub-questions
+- Keep each interview question **short and focused** (ideally 1–2 sentences)
+
+Analyze the conversation history, candidate's latest response, and all contextual data above.
+Generate your [ANALYSIS] section first, then your [RESPONSE].
+Remember: You are Byte, an expert recruiter. Be professional, insightful, and adaptive.
+"""
+
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(history)
+        messages.append({"role": "user", "content": user_input})
+
+        stream = self.client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=messages,
+            temperature=0.65,
+            stream=True,
+        )
+
+        for chunk in stream:
+            try:
+                delta = chunk.choices[0].delta
+                text = getattr(delta, "content", None)
+                if text:
+                    yield text
+            except Exception:
+                # Best-effort parsing across SDK versions
+                try:
+                    text = chunk.choices[0].delta.get("content")
+                    if text:
+                        yield text
+                except Exception:
+                    continue
+
     def generate_response(
         self,
         user_input,

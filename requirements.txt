@@ -1,6 +1,7 @@
 flask
 flask-cors
 groq
+flask-sock
 python-dotenv
 pypdf
 reportlab
