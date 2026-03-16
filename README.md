@@ -571,25 +571,46 @@ User Answer
 
 | Feature | Description | Implementation |
 |---------|-------------|---------------|
-| **Multi-Role Support** | 12 different interview roles | Role selection dropdown, role-specific questioning |
-| **Persona Detection** | 7 persona types with adaptive responses | ProfilerAgent with advanced NLP analysis |
-| **Real-time Scoring** | Multi-dimensional evaluation | GraderAgent with strict rubrics |
-| **Adaptive Difficulty** | Questions adjust based on performance | Score-based difficulty scaling |
-| **Voice Support** | Speech input/output | Web Speech API integration |
-| **Edge Case Handling** | Off-topic question detection | Explicit edge case labeling and redirection |
+| **Multi-Role Support** | 12 different interview roles | Role selection dropdown; role-aware prompts and focus areas |
+| **Multi-Agent Brain** | Profiler, Grader, Interviewer, Feedback generator | Each agent has its own long, strict system prompt and JSON contracts |
+| **Persona Detection** | 7 persona types with adaptive responses | `ProfilerAgent` classifies persona, sentiment, authenticity, red flags |
+| **Real-time Scoring** | Multi-dimensional evaluation per answer | `GraderAgent` with strict rubrics, penalties, depth + follow‑up flags |
+| **Adaptive Difficulty** | Questions adjust based on performance and persona | Score‑ and persona‑based branching in `InterviewerAgent` |
+| **Voice Support** | Speech input + synthesized output | Web Speech API for mic; SpeechSynthesis for “Byte” responses |
+| **Edge Case Handling** | Off‑topic / trolling detection | Explicit `edge_case` persona + edge‑case history and feedback section |
 
-### Advanced Features
+### Coding Round & IDE (LeetCode‑style)
 
-| Feature | Description | Benefits |
-|---------|-------------|----------|
-| **Session History** | Save/load interview sessions | Track progress over time |
-| **PDF Export** | Professional feedback reports | Share with mentors/coaches |
-| **Time Tracking** | Real-time interview duration | Manage pacing |
-| **Analytics Dashboard** | Performance metrics visualization | Identify trends |
-| **Learning Resources** | AI-powered recommendations | Personalized improvement paths |
-| **Keyboard Shortcuts** | Power user navigation | Faster workflow |
-| **Auto-save** | Automatic session saving | Never lose progress |
-| **Settings Management** | Customizable interview parameters | Personalized experience |
+| Feature | Description | Notes |
+|---------|-------------|-------|
+| **Role‑aware Coding Round** | Every session **starts** with a coding task chosen by role (Software/Backend/Frontend/DevOps → DSA, Data/ML roles → SQL/ML/Data Analysis) | Implemented via `QUESTION_BANK` + `pick_coding_question` and `/start-coding-round` |
+| **LeetCode‑style Layout** | Split panel: left = rich problem statement; right = language selector, editor, console | Implemented in `templates/index.html` (`coding-panel`) with Tailwind‑styled cards |
+| **Default Function Template (Python)** | For each DSA problem a Python function signature is prefilled; user codes **inside** the function | `python_signature` per question + editor prefill in `startCodingRound()` |
+| **Python Auto‑Judge (3 Default Tests)** | On **Run Code**, Python solutions are executed against 3 canonical tests; UI shows “X/3 tests passed” and per‑test ✅/❌ | `/run-code` runs against `python_tests` for the active question and returns structured results |
+| **Language Selector** | User can choose Python, C, C++, Java, JavaScript, Go | Non‑Python languages are accepted and recorded; live auto‑judge currently Python‑only for safety |
+| **Explain‑Your‑Code Handoff** | After submitting code, the system immediately asks: “Explain your approach, data structures, and complexity” and then continues the full interview | `/submit-coding-round` logs the code, infers skills, and seeds the first technical question |
+
+### Analytics, Feedback & Learning
+
+| Feature | Description | Implementation |
+|---------|-------------|---------------|
+| **Live Analytics Bar** | At the top of the chat: total questions, average score, phase, elapsed time, edge‑case indicator | Updated every `/chat` response using `debug` + `analytics` payloads |
+| **Skill Breakdown** | Topic‑wise performance (e.g., Data Structures, Algorithms, SQL, ML, Behavioral) with colored bars | `qa_log` + `infer_skills_from_question` + `compute_skill_breakdown` → rendered in Analytics modal |
+| **Trend & Distribution** | Summary cards for average score, best/worst, score trend, and histogram‑style bars | Implemented in `renderAnalyticsModal()` |
+| **Session Save/Load** | In‑memory session snapshots with list/history UI | `/save-session`, `/list-sessions`, `/load-session` |
+| **Transcript Export** | Download full interview transcript as TXT (and feedback as TXT/PDF) | `/export-transcript`, `/export-transcript-txt`, `/get-feedback`, `/export-pdf` |
+| **Study Plan Generator** | 7 / 14 / 30‑day AI‑generated study plans based on scores + skill breakdown | `/generate-study-plan` + Study Plan modal |
+| **Learning Resources** | AI‑curated courses/books/platforms based on interview feedback | `/get-learning-resources` + Learning Resources modal |
+
+### UX & Interaction Details
+
+| Area | Behavior |
+|------|----------|
+| **Voice Capture** | Mic button uses Web Speech API to fill the answer box; user explicitly submits via the Send button (no surprise auto‑send) |
+| **Silence Nudging** | A 90‑second inactivity timer triggers a gentle “[SYSTEM_TIMEOUT]” nudge; avoids nagging after just a few seconds |
+| **Question Shape** | `InterviewerAgent` is explicitly instructed to ask **one short, focused question at a time**, not giant multi‑part dumps |
+| **Follow‑up Discipline** | When depth is missing or `requires_followup` is true, the interviewer asks **exactly one** narrow follow‑up question |
+| **Edge‑Case Surfacing** | Off‑topic or trolling questions are logged and summarized in the final feedback under an “Edge Cases” section |
 
 ### Interview Roles
 

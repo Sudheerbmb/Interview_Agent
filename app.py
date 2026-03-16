@@ -1,5 +1,6 @@
 #
 import os
+import random
 from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
 from groq import Groq
@@ -9,6 +10,8 @@ from io import BytesIO
 import re
 import json
 import datetime
+import io
+import sys
 
 # Optional PDF export (requires reportlab)
 try:
@@ -51,6 +54,9 @@ session_context = {
     "question_count": 0,
     "all_scores": [],
     "interview_history": [],
+    # Structured Q/A log for analytics + transcript export
+    # Each entry: {question_id, phase, question, answer, score, persona, is_edge_case, timestamp_iso}
+    "qa_log": [],
     "started": False,
     "edge_cases_detected": [],
     "red_flags_history": [],
@@ -126,6 +132,201 @@ AVAILABLE_ROLES = {
     }
 }
 
+QUESTION_BANK = {
+    "dsa": [
+        {
+            "id": "dsa_two_sum",
+            "title": "Two Sum",
+            "difficulty": "Easy",
+            "prompt": "You are given an integer array nums and an integer target. Your task is to return the indices of the two numbers such that they add up to target.\n\nInput:\n- nums: an array of integers (can contain positive, negative, and zero values)\n- target: an integer\n\nOutput:\n- A pair of indices [i, j] (0-based) such that nums[i] + nums[j] = target and i != j.\n\nConstraints:\n- 2 <= nums.length <= 10^5\n- -10^9 <= nums[i], target <= 10^9\n- There will always be exactly one solution.\n- You may not use the same element twice.\n\nExamples:\n1) Input: nums = [2,7,11,15], target = 9\n   Output: [0,1]\n   Explanation: nums[0] + nums[1] = 2 + 7 = 9.\n\n2) Input: nums = [3,2,4], target = 6\n   Output: [1,2]\n\n3) Input: nums = [3,3], target = 6\n   Output: [0,1]\n\nVisible test cases:\n- Small arrays with positive numbers\n- Arrays with negative and positive numbers\n- Arrays with duplicate values\n\nHidden test cases:\n- Large arrays to test O(n) vs O(n^2)\n- Edge values near -10^9 and 10^9\n\nYour solution will be tested against multiple visible and hidden cases. Aim for an O(n) time solution using a hash map.",
+            "tags": ["Array", "Hash Table"],
+            "python_signature": "def two_sum(nums, target):",
+            "python_tests": [
+                {"id": 1, "input": {"nums": [2, 7, 11, 15], "target": 9}, "expected": [0, 1]},
+                {"id": 2, "input": {"nums": [3, 2, 4], "target": 6}, "expected": [1, 2]},
+                {"id": 3, "input": {"nums": [3, 3], "target": 6}, "expected": [0, 1]}
+            ]
+        },
+        {
+            "id": "dsa_reverse_linked_list",
+            "title": "Reverse Linked List",
+            "difficulty": "Easy",
+            "prompt": "Given the head of a singly linked list, reverse the list and return the head of the reversed list.\n\nInput:\n- A singly linked list head where each node has: val (int), next (pointer to next node or null).\n\nOutput:\n- The new head of the reversed linked list.\n\nConstraints:\n- The number of nodes in the list is in the range [0, 5 * 10^4].\n- -10^5 <= Node.val <= 10^5.\n\nExamples:\n1) Input: 1 -> 2 -> 3 -> 4 -> 5 -> null\n   Output: 5 -> 4 -> 3 -> 2 -> 1 -> null\n\n2) Input: 1 -> 2 -> null\n   Output: 2 -> 1 -> null\n\n3) Input: null\n   Output: null\n\nVisible test cases:\n- Short lists (length 0, 1, 2)\n- Lists with increasing values\n\nHidden test cases:\n- Long lists (5 * 10^4 nodes)\n- Values with negatives and duplicates\n\nYour solution will be executed against multiple test cases; prefer an iterative O(n) time, O(1) space approach.",
+            "tags": ["Linked List"],
+            "python_signature": "def reverse_list(head):",
+            "python_tests": [
+                {
+                    "id": 1,
+                    "input": {"head": [1, 2, 3, 4, 5]},
+                    "expected": [5, 4, 3, 2, 1]
+                },
+                {
+                    "id": 2,
+                    "input": {"head": [1, 2]},
+                    "expected": [2, 1]
+                },
+                {
+                    "id": 3,
+                    "input": {"head": []},
+                    "expected": []
+                }
+            ]
+        },
+        {
+            "id": "dsa_longest_substring",
+            "title": "Longest Substring Without Repeating Characters",
+            "difficulty": "Medium",
+            "prompt": "Given a string s, return the length of the longest substring without repeating characters.\n\nInput:\n- s: a string consisting of English letters, digits, symbols, and spaces.\n\nOutput:\n- An integer representing the maximum length of a substring of s that contains no repeated characters.\n\nConstraints:\n- 0 <= s.length <= 5 * 10^4\n- s may contain any printable ASCII characters.\n\nExamples:\n1) Input: s = \"abcabcbb\"\n   Output: 3\n   Explanation: The answer is \"abc\", with the length of 3.\n\n2) Input: s = \"bbbbb\"\n   Output: 1\n   Explanation: The answer is \"b\".\n\n3) Input: s = \"pwwkew\"\n   Output: 3\n   Explanation: The answer is \"wke\".\n\nVisible test cases:\n- Empty string\n- Strings with all unique characters\n- Strings with all same characters\n\nHidden test cases:\n- Long strings (length ~50k)\n- Mix of letters, digits, and symbols\n\nThe judge will run multiple visible and hidden tests; an optimal solution should be O(n) using a sliding window.",
+            "tags": ["String", "Sliding Window"],
+            "python_signature": "def length_of_longest_substring(s):",
+            "python_tests": [
+                {"id": 1, "input": {"s": "abcabcbb"}, "expected": 3},
+                {"id": 2, "input": {"s": "bbbbb"}, "expected": 1},
+                {"id": 3, "input": {"s": "pwwkew"}, "expected": 3}
+            ]
+        },
+        {
+            "id": "dsa_merge_intervals",
+            "title": "Merge Intervals",
+            "difficulty": "Medium",
+            "prompt": "You are given an array of intervals where intervals[i] = [start_i, end_i], representing the start and end of an interval on the real number line. Your task is to merge all overlapping intervals and return an array of the non-overlapping intervals that cover all the intervals in the input.\n\nInput:\n- intervals: a list of intervals where each interval is a two-element list [start_i, end_i]\n\nOutput:\n- A new list of intervals where all overlapping intervals are merged.\n- The result should be sorted by start time.\n\nConstraints:\n- 0 <= intervals.length <= 10^4\n- -10^5 <= start_i <= end_i <= 10^5\n\nExamples:\n1) Input: intervals = [[1,3],[2,6],[8,10],[15,18]]\n   Output: [[1,6],[8,10],[15,18]]\n   Explanation: [1,3] and [2,6] overlap and are merged into [1,6].\n\n2) Input: intervals = [[1,4],[4,5]]\n   Output: [[1,5]]\n   Explanation: Intervals that just touch at endpoints are considered overlapping.\n\n3) Input: intervals = []\n   Output: []\n\nVisible test cases:\n- No intervals\n- Intervals that do not overlap\n- Intervals that all overlap into a single large interval\n\nHidden test cases:\n- Large number of intervals (up to 10^4)\n- Intervals with negative values\n\nAn optimal solution should run in O(n log n) time due to sorting, with O(1) or O(n) extra space depending on implementation.",
+            "tags": ["Array", "Sorting"],
+            "python_signature": "def merge(intervals):",
+            "python_tests": [
+                {"id": 1, "input": {"intervals": [[1,3],[2,6],[8,10],[15,18]]}, "expected": [[1,6],[8,10],[15,18]]},
+                {"id": 2, "input": {"intervals": [[1,4],[4,5]]}, "expected": [[1,5]]},
+                {"id": 3, "input": {"intervals": []}, "expected": []}
+            ]
+        },
+        {
+            "id": "dsa_max_subarray",
+            "title": "Maximum Subarray",
+            "difficulty": "Easy",
+            "prompt": "Given an integer array nums, find the contiguous subarray (containing at least one number) which has the largest sum and return its sum.\n\nInput:\n- nums: an array of integers (can be positive, negative, or zero)\n\nOutput:\n- An integer representing the maximum possible sum of any non-empty contiguous subarray of nums.\n\nConstraints:\n- 1 <= nums.length <= 10^5\n- -10^4 <= nums[i] <= 10^4\n\nExamples:\n1) Input: nums = [-2,1,-3,4,-1,2,1,-5,4]\n   Output: 6\n   Explanation: The subarray [4,-1,2,1] has the largest sum = 6.\n\n2) Input: nums = [1]\n   Output: 1\n\n3) Input: nums = [5,4,-1,7,8]\n   Output: 23\n\nVisible test cases:\n- All positive numbers\n- All negative numbers\n- Mix of positive and negative\n\nHidden test cases:\n- Large arrays (length ~10^5)\n- Edge cases where the best subarray is at the beginning or end of the array\n\nAn optimal solution should run in O(n) time using Kadane's algorithm and O(1) extra space.",
+            "tags": ["Array", "Dynamic Programming"],
+            "python_signature": "def max_sub_array(nums):",
+            "python_tests": [
+                {"id": 1, "input": {"nums": [-2,1,-3,4,-1,2,1,-5,4]}, "expected": 6},
+                {"id": 2, "input": {"nums": [1]}, "expected": 1},
+                {"id": 3, "input": {"nums": [5,4,-1,7,8]}, "expected": 23}
+            ]
+        },
+    ],
+    "sql": [
+        {
+            "id": "sql_top_earners",
+            "title": "Top Earners by Department",
+            "difficulty": "Easy",
+            "prompt": "You are given two tables:\n\n1) Employees(emp_id, name, salary, dept_id)\n2) Departments(dept_id, dept_name)\n\nWrite an SQL query to return the highest-paid employee in each department.\n\nOutput columns:\n- dept_name\n- emp_id\n- name\n- salary\n\nRequirements:\n- If multiple employees in a department share the same highest salary, return all of them.\n- Order the result by dept_name ascending, then salary descending.\n\nExample:\nEmployees:\nemp_id | name   | salary | dept_id\n1      | Alice  | 100000 | 10\n2      | Bob    | 120000 | 10\n3      | Carol  | 90000  | 20\n\nDepartments:\ndept_id | dept_name\n10      | Engineering\n20      | Marketing\n\nOutput:\ndept_name   | emp_id | name  | salary\nEngineering | 2      | Bob   | 120000\nMarketing   | 3      | Carol | 90000\n\nVisible test cases:\n- Departments with a single employee\n- Departments with multiple employees and a clear single top earner\n\nHidden test cases:\n- Departments where multiple employees tie for top salary\n- Departments with no employees (should they show up or not?)",
+            "tags": ["JOIN", "Aggregation"]
+        },
+        {
+            "id": "sql_user_retention",
+            "title": "User Retention",
+            "difficulty": "Medium",
+            "prompt": "You are given a table logins(user_id, login_date) where each row represents a login event by a user on a specific date.\n\nTask:\nWrite an SQL query to calculate, for each calendar week, the percentage of users who logged in on two or more distinct days within that week.\n\nAssumptions:\n- login_date is a DATE (or TIMESTAMP) column.\n- A \"week\" can be assumed to start on Monday (use your SQL dialect's week function accordingly).\n\nOutput columns:\n- week_start_date (or week identifier)\n- total_users_in_week\n- users_with_2plus_days\n- retention_percentage (users_with_2plus_days / total_users_in_week * 100)\n\nVisible test cases:\n- Weeks with only one login per user\n- Weeks where some users log in many times\n\nHidden test cases:\n- Multiple months of data spanning many weeks\n- Users active in multiple weeks\n\nYour solution should use aggregation and (optionally) window functions to compute the weekly retention percentage.",
+            "tags": ["Window Functions", "Aggregation"]
+        },
+    ],
+    "ml": [
+        {
+            "id": "ml_binary_classifier",
+            "title": "Binary Classification Pipeline",
+            "difficulty": "Medium",
+            "prompt": "You are given a CSV dataset with customer features and a binary target label churn (0 = did not churn, 1 = churned).\n\nInput:\n- A table with columns such as: customer_id, age, tenure, monthly_charges, total_charges, contract_type, payment_method, etc.\n- A binary target column churn (0/1).\n\nTask:\nDesign and (if possible) implement a scikit-learn pipeline that:\n1) Performs preprocessing:\n   - Handles missing values.\n   - Encodes categorical variables (e.g., OneHotEncoder).\n   - Scales numerical features (e.g., StandardScaler).\n2) Trains a binary classifier (e.g., LogisticRegression, RandomForestClassifier, or XGBoost).\n3) Evaluates the model using ROC-AUC on a hold-out validation set.\n4) Persists the trained model to disk (e.g., using joblib or pickle).\n\nYou should explain:\n- How you would split the data (train/validation/test).\n- Which metrics you monitor (ROC-AUC, precision, recall, etc.).\n- How you would handle class imbalance if it exists.\n\nVisible test cases:\n- Balanced dataset with clean features\n\nHidden test cases:\n- Imbalanced dataset\n- Missing values and unseen categories in validation set",
+            "tags": ["scikit-learn", "Classification"]
+        },
+        {
+            "id": "ml_model_selection",
+            "title": "Model Selection for Imbalanced Data",
+            "difficulty": "Medium",
+            "prompt": "You are working on a fraud detection problem where only ~1% of transactions are fraudulent.\n\nTask:\nExplain and, if possible, implement how you would:\n1) Explore and preprocess the data.\n2) Handle the heavy class imbalance (e.g., class weights, SMOTE, undersampling).\n3) Choose and tune models (e.g., tree-based models, gradient boosting).\n4) Evaluate performance with appropriate metrics (e.g., ROC-AUC, PR-AUC, recall at fixed precision).\n5) Avoid data leakage and ensure your evaluation is reliable (cross-validation, time-based splits if needed).\n\nVisible test cases:\n- Synthetic dataset with moderate imbalance\n\nHidden test cases:\n- More extreme imbalance\n- Noisy features requiring regularization or feature selection",
+            "tags": ["Imbalanced Data", "Evaluation"]
+        },
+    ],
+    "data_analysis": [
+        {
+            "id": "da_sales_insights",
+            "title": "Sales Insights Dashboard",
+            "difficulty": "Easy",
+            "prompt": "You are given a transactional sales dataset with columns:\n- order_id\n- customer_id\n- order_date\n- product\n- category\n- amount (numeric)\n\nTask:\nDescribe and, if possible, implement in Python (using pandas) an analysis that computes:\n1) Monthly revenue trend (total revenue per calendar month).\n2) Top 5 products by total revenue.\n3) Repeat-customer rate (percentage of customers with 2 or more orders).\n\nYou should outline:\n- How you would parse dates and handle time zones if needed.\n- How you would deal with missing or inconsistent data.\n- How you would visualize the results (e.g., line charts, bar charts).\n\nVisible test cases:\n- Small dataset spanning a few months\n\nHidden test cases:\n- Larger dataset with thousands of rows\n- Edge cases like customers with only one big order vs many small ones",
+            "tags": ["Pandas", "Aggregation"]
+        },
+        {
+            "id": "da_ab_test",
+            "title": "A/B Test Analysis",
+            "difficulty": "Medium",
+            "prompt": "You ran an A/B test on a website to compare variant A (control) and variant B (treatment).\n\nYou have a table with columns:\n- user_id\n- group (\"A\" or \"B\")\n- conversion_flag (0/1)\n\nTask:\nDescribe and, if possible, implement how you would analyze whether variant B is significantly better than A.\nYour answer should cover:\n1) How you would explore the data (sample sizes, conversion rates per group).\n2) Which statistical test you would use (e.g., z-test for proportions) and why.\n3) How you would compute confidence intervals for the lift.\n4) How you would handle multiple tests, if any.\n5) How you would interpret practical vs statistical significance.\n\nVisible test cases:\n- Balanced sample sizes\n- Clear difference in conversion rates\n\nHidden test cases:\n- Unbalanced groups\n- Very small effect sizes requiring careful interpretation",
+            "tags": ["Statistics", "Experimentation"]
+        },
+    ],
+}
+
+SKILL_KEYWORDS = {
+    "Data structures": ["array", "linked list", "stack", "queue", "tree", "graph", "heap", "hash", "trie"],
+    "Algorithms": ["big-o", "complexity", "dp", "dynamic programming", "greedy", "bfs", "dfs", "dijkstra", "sorting", "search"],
+    "System design": ["scale", "scalable", "load balancer", "cache", "redis", "queue", "kafka", "database", "sharding", "replication", "latency", "throughput", "microservice"],
+    "APIs": ["api", "rest", "graphql", "endpoint", "http", "authentication", "oauth", "jwt", "rate limit"],
+    "Databases": ["sql", "postgres", "mysql", "index", "transaction", "acid", "join", "query", "normalization", "nosql", "mongodb"],
+    "ML": ["model", "training", "overfitting", "feature", "cross-validation", "auc", "f1", "precision", "recall", "rmse", "classification", "regression"],
+    "Statistics": ["p-value", "hypothesis", "distribution", "variance", "bias", "confidence interval", "bayes", "correlation"],
+    "Data visualization": ["dashboard", "plot", "chart", "matplotlib", "seaborn", "tableau", "power bi"],
+    "Behavioral (STAR)": ["situation", "task", "action", "result", "conflict", "leadership", "failure", "stakeholder"],
+    "DevOps/Cloud": ["ci/cd", "pipeline", "docker", "kubernetes", "terraform", "aws", "gcp", "azure", "monitoring", "logging"],
+}
+
+
+def infer_skills_from_question(question_text, role_info):
+    if not question_text:
+        return []
+    q = question_text.lower()
+    hits = []
+    for skill, kws in SKILL_KEYWORDS.items():
+        if any(kw in q for kw in kws):
+            hits.append(skill)
+    # Light biasing toward role focus areas if no keyword hit
+    if not hits and role_info and role_info.get("focus_areas"):
+        hits = role_info["focus_areas"][:1]
+    return hits[:3]
+
+
+def compute_skill_breakdown(qa_log):
+    buckets = {}
+    for entry in qa_log or []:
+        score = entry.get("score")
+        for skill in entry.get("skills", []) or []:
+            b = buckets.setdefault(skill, {"count": 0, "scores": []})
+            b["count"] += 1
+            if isinstance(score, (int, float)):
+                b["scores"].append(float(score))
+    # Convert to avg
+    breakdown = {}
+    for skill, b in buckets.items():
+        scores = b["scores"]
+        breakdown[skill] = {
+            "count": b["count"],
+            "average_score": (sum(scores) / len(scores)) if scores else 0,
+        }
+    return breakdown
+
+
+def get_coding_category_for_role(role_key: str) -> str:
+    if role_key in ["software_engineer", "backend_engineer", "frontend_engineer", "devops_engineer", "qa_engineer", "security_engineer"]:
+        return "dsa"
+    if role_key in ["data_scientist", "ml_engineer"]:
+        return "ml"
+    if role_key in ["data_engineer", "cloud_architect"]:
+        return "sql"
+    # Default fallback
+    return "dsa"
+
+
+def pick_coding_question(role_key: str):
+    category = get_coding_category_for_role(role_key)
+    questions = QUESTION_BANK.get(category, [])
+    if not questions:
+        return category, None
+    return category, random.choice(questions)
 
 def extract_pdf(file):
     reader = PdfReader(BytesIO(file.read()))
@@ -154,7 +355,17 @@ def check_interview_end(user_msg, question_count):
         "show feedback", "interview complete"
     ]
     user_lower = user_msg.lower()
-    return any(phrase in user_lower for phrase in end_phrases) or question_count >= 12
+    wants_to_end = any(phrase in user_lower for phrase in end_phrases)
+    
+    # Hard cap: automatically end after 15 questions
+    if question_count >= 15:
+        return True
+    
+    # Allow manual end only after at least 10 questions
+    if wants_to_end and question_count >= 10:
+        return True
+    
+    return False
 
 
 @app.route('/')
@@ -175,10 +386,12 @@ def upload():
         session_context['question_count'] = 0
         session_context['all_scores'] = []
         session_context['interview_history'] = []
+        session_context['qa_log'] = []
         session_context['started'] = False
         session_context['interview_phase'] = "Introduction"
         session_context['edge_cases_detected'] = []
         session_context['red_flags_history'] = []
+        session_context['coding_round'] = None
         
         role_info = AVAILABLE_ROLES.get(selected_role, AVAILABLE_ROLES['software_engineer'])
         
@@ -297,6 +510,20 @@ def chat():
         # Store score
         if 'score' in grader_data:
             session_context['all_scores'].append(grader_data['score'])
+        
+        # Log the Q/A (this answer corresponds to the previously asked question)
+        role_info = AVAILABLE_ROLES.get(session_context.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
+        session_context['qa_log'].append({
+            "question_id": session_context['question_count'],
+            "phase": session_context.get('interview_phase', 'Introduction'),
+            "question": session_context.get('current_question', ''),
+            "answer": user_msg,
+            "score": grader_data.get('score'),
+            "persona": profile_data.get('persona', 'normal'),
+            "is_edge_case": profile_data.get('persona') == 'edge_case' or not profile_data.get('is_relevant', True),
+            "skills": infer_skills_from_question(session_context.get('current_question', ''), role_info),
+            "timestamp_iso": datetime.datetime.now().isoformat(),
+        })
 
     # 3. GENERATE RESPONSE
     role_info = AVAILABLE_ROLES.get(session_context.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
@@ -332,16 +559,41 @@ def chat():
     session_context['interview_history'].append({"role": "assistant", "content": raw_response})
 
     # Enhanced debug information
+    # Always compute analytics so the dashboard can update every question
+    analytics = {
+        "total_questions": session_context['question_count'],
+        "scores": session_context['all_scores'],
+        "average_score": (
+            sum(session_context['all_scores']) / len(session_context['all_scores'])
+            if session_context['all_scores'] else 0
+        ),
+        "highest_score": max(session_context['all_scores']) if session_context['all_scores'] else 0,
+        "lowest_score": min(session_context['all_scores']) if session_context['all_scores'] else 0,
+        "edge_cases_count": len(session_context['edge_cases_detected']),
+        "trend": (
+            "improving"
+            if len(session_context['all_scores']) > 1
+            and session_context['all_scores'][-1] > session_context['all_scores'][0]
+            else "stable"
+        ) if session_context['all_scores'] else "baseline",
+        "skill_breakdown": compute_skill_breakdown(session_context.get('qa_log', [])),
+    }
+
     return jsonify({
         "response": raw_response,
         "interview_complete": False,
-            "debug": {
+        "coach": {
+            "strengths": grader_data.get("strengths", []) if grader_data else [],
+            "improvements": grader_data.get("improvements", []) if grader_data else [],
+            "followup_suggestions": grader_data.get("followup_suggestions", []) if grader_data else [],
+        },
+        "debug": {
             "persona": profile_data.get('persona', 'normal'),
             "score": grader_data.get('score', 'N/A'),
             "follow_up": grader_data.get('requires_followup', False),
             "phase": session_context['interview_phase'],
             "question_count": session_context['question_count'],
-            "average_score": sum(session_context['all_scores']) / len(session_context['all_scores']) if session_context['all_scores'] else 'N/A',
+            "average_score": analytics["average_score"] if session_context['all_scores'] else 'N/A',
             "confidence": profile_data.get('confidence', 'medium'),
             "communication_quality": profile_data.get('communication_quality', 'good'),
             "is_edge_case": profile_data.get('persona') == 'edge_case' or not profile_data.get('is_relevant', True),
@@ -352,11 +604,7 @@ def chat():
             "authenticity_score": profile_data.get('authenticity_score', 0.7),
             "specificity_score": profile_data.get('specificity_score', 0.7)
         },
-        "analytics": {
-            "total_questions": session_context['question_count'],
-            "scores": session_context['all_scores'],
-            "trend": "improving" if len(session_context['all_scores']) > 1 and session_context['all_scores'][-1] > session_context['all_scores'][0] else "stable"
-        } if session_context['all_scores'] else {}
+        "analytics": analytics
     })
 
 
@@ -411,11 +659,54 @@ def reset():
     session_context['question_count'] = 0
     session_context['all_scores'] = []
     session_context['interview_history'] = []
+    session_context['qa_log'] = []
     session_context['started'] = False
     session_context['edge_cases_detected'] = []
     session_context['red_flags_history'] = []
+    session_context['coding_round'] = None
     
     return jsonify({"status": "success", "message": "Session reset"})
+
+
+@app.route('/export-transcript', methods=['GET'])
+def export_transcript():
+    """Export transcript (JSON) for replay/download."""
+    return jsonify({
+        "status": "success",
+        "role": session_context.get("selected_role", ""),
+        "question_count": session_context.get("question_count", 0),
+        "qa_log": session_context.get("qa_log", []),
+        "analytics": {
+            "scores": session_context.get("all_scores", []),
+            "skill_breakdown": compute_skill_breakdown(session_context.get("qa_log", [])),
+            "edge_cases_count": len(session_context.get("edge_cases_detected", [])),
+        },
+    })
+
+
+@app.route('/export-transcript-txt', methods=['GET'])
+def export_transcript_txt():
+    """Export transcript as plain text."""
+    lines = []
+    for entry in session_context.get("qa_log", []):
+        qid = entry.get("question_id", "")
+        phase = entry.get("phase", "")
+        score = entry.get("score", "")
+        skills = ", ".join(entry.get("skills", []) or [])
+        lines.append(f"Q{qid} ({phase}) [{skills}]")
+        lines.append(entry.get("question", ""))
+        lines.append("")
+        lines.append(f"A (score: {score})")
+        lines.append(entry.get("answer", ""))
+        lines.append("")
+        lines.append("-" * 60)
+    content = "\n".join(lines) if lines else "No transcript available yet."
+    return send_file(
+        BytesIO(content.encode("utf-8")),
+        mimetype="text/plain",
+        as_attachment=True,
+        download_name=f"interview-transcript-{datetime.datetime.now().strftime('%Y%m%d')}.txt",
+    )
 
 @app.route('/get-roles', methods=['GET'])
 def get_roles():
@@ -621,6 +912,230 @@ Generate 5-7 specific, actionable learning resources (courses, books, practice p
                 ]
             }
         })
+
+
+@app.route('/start-coding-round', methods=['GET'])
+def start_coding_round():
+    """Return a coding question based on selected role to start the interview."""
+    role_key = session_context.get('selected_role', 'software_engineer')
+    category, question = pick_coding_question(role_key)
+    if question is None:
+        return jsonify({"status": "error", "message": "No coding questions available."}), 500
+
+    session_context['coding_round'] = {
+        "category": category,
+        "question": question,
+        "started_at": datetime.datetime.now().isoformat(),
+    }
+
+    return jsonify({
+        "status": "success",
+        "category": category,
+        "question": question,
+    })
+
+
+@app.route('/submit-coding-round', methods=['POST'])
+def submit_coding_round():
+    """Capture coding solution and return an explanation question to start the interview."""
+    if not session_context.get('coding_round'):
+        return jsonify({"status": "error", "message": "No active coding round."}), 400
+
+    data = request.json or {}
+    code = data.get("code") or ""
+    language = (data.get("language") or "python").lower()
+    coding = session_context['coding_round']
+    q = coding.get("question", {})
+
+    # Log coding round as a QA entry without a numeric score
+    role_info = AVAILABLE_ROLES.get(session_context.get('selected_role', 'software_engineer'), AVAILABLE_ROLES['software_engineer'])
+    skills = infer_skills_from_question(q.get("title", "") + " " + q.get("prompt", ""), role_info)
+    session_context['qa_log'].append({
+        "question_id": "coding_round",
+        "phase": "Coding",
+        "question": f"{q.get('title', '')}: {q.get('prompt', '')}",
+        "answer": code,
+        "language": language,
+        "score": None,
+        "persona": "normal",
+        "is_edge_case": False,
+        "skills": skills,
+        "timestamp_iso": datetime.datetime.now().isoformat(),
+    })
+
+    # Prepare explanation question that will be used as the first interview question
+    explanation_question = (
+        f"You just implemented a solution for the coding problem '{q.get('title', '')}'. "
+        f"Please explain your approach step by step, including key data structures, algorithms, "
+        f"and the time and space complexity of your solution."
+    )
+
+    session_context['current_question'] = explanation_question
+    session_context['interview_phase'] = "Technical"
+    session_context['started'] = True
+
+    return jsonify({
+        "status": "success",
+        "explanation_question": explanation_question,
+    })
+
+@app.route('/generate-study-plan', methods=['POST'])
+def generate_study_plan():
+    """Generate a 7/14/30 day study plan based on performance."""
+    try:
+        data = request.json or {}
+        scores = data.get('scores') or session_context.get('all_scores', [])
+        analytics = data.get('analytics') or {}
+        skill_breakdown = analytics.get('skill_breakdown') or compute_skill_breakdown(session_context.get('qa_log', []))
+        role = data.get('role') or session_context.get('selected_role', '')
+
+        avg_score = sum(scores) / len(scores) if scores else 0
+
+        prompt = f"""You are an expert interview coach.
+
+Role: {role}
+Average score: {avg_score:.1f}
+Skill breakdown (average scores per skill): {json.dumps(skill_breakdown)}
+
+Design a concrete, realistic study plan with three tracks:
+- 7-day intensive plan
+- 14-day standard plan
+- 30-day deep-dive plan
+
+For each plan, provide:
+- daily objectives
+- specific topics to study (mapped to the weakest skills you see)
+- suggested practice activities (coding practice, system-design prompts, behavioral questions)
+- 2–3 example resources (platforms/books) but no external links are required.
+
+Return JSON with:
+{{
+  "plans": [
+    {{
+      "duration_days": 7 | 14 | 30,
+      "label": "string",
+      "summary": "short description",
+      "days": [
+        {{
+          "day": 1,
+          "focus": "string",
+          "tasks": ["...","..."]
+        }}
+      ]
+    }}
+  ]
+}}"""
+
+        completion = client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            messages=[
+                {"role": "system", "content": "You are a strict but supportive interview coach who designs concrete study plans."},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.5,
+        )
+
+        result = json.loads(completion.choices[0].message.content)
+        return jsonify({"status": "success", "plan": result})
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+        }), 500
+
+
+@app.route('/run-code', methods=['POST'])
+def run_code():
+    """Very simple coding-round runner for Python snippets."""
+    data = request.json or {}
+    language = (data.get('language') or 'python').lower()
+    code = data.get('code') or ''
+
+    if not code.strip():
+        return jsonify({"status": "error", "message": "Code is empty."}), 400
+
+    # For now, only Python execution is supported; other languages are accepted but not executed
+    if language != 'python':
+        return jsonify({
+            "status": "success",
+            "output": f"Execution preview is only supported for Python in this demo.\nYour {language} code has been recorded for review."
+        })
+
+    # If we have an active coding_round with Python tests, run them and report pass/fail
+    coding = session_context.get("coding_round") or {}
+    question = coding.get("question") or {}
+    tests = question.get("python_tests") or []
+    signature = question.get("python_signature")
+
+    # Minimal sandbox: no builtins beyond a safe subset
+    safe_globals = {
+        "__builtins__": {
+            "range": range,
+            "len": len,
+            "print": print,
+            "sum": sum,
+            "min": min,
+            "max": max,
+            "abs": abs,
+            "sorted": sorted,
+        }
+    }
+    buffer = io.StringIO()
+    old_stdout = sys.stdout
+    try:
+        sys.stdout = buffer
+        exec(code, safe_globals, {})
+
+        # If no structured tests, just return stdout like a REPL
+        if not tests or not signature:
+            output = buffer.getvalue()
+            return jsonify({"status": "success", "output": output})
+
+        fn_name = signature.split("(")[0].replace("def", "").strip()
+        fn = safe_globals.get(fn_name)
+        if not callable(fn):
+            return jsonify({
+                "status": "error",
+                "output": buffer.getvalue(),
+                "message": f"Function {fn_name} is not defined correctly. Please keep the signature as: {signature}"
+            }), 400
+
+        results = []
+        passed_count = 0
+        for t in tests:
+            inp = t.get("input", {})
+            expected = t.get("expected")
+            try:
+                actual = fn(**inp)
+                ok = actual == expected
+            except Exception as e:
+                actual = str(e)
+                ok = False
+            if ok:
+                passed_count += 1
+            results.append({
+                "id": t.get("id"),
+                "input": inp,
+                "expected": expected,
+                "actual": actual,
+                "passed": ok,
+            })
+
+        if passed_count == len(results):
+            summary = f"All {passed_count} tests passed."
+        else:
+            summary = f"{passed_count}/{len(results)} tests passed."
+
+        return jsonify({
+            "status": "success",
+            "output": summary,
+            "tests": results,
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "output": buffer.getvalue(), "message": str(e)}), 400
+    finally:
+        sys.stdout = old_stdout
 
 
 if __name__ == '__main__':
