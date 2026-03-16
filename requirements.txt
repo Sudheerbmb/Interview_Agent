@@ -4,6 +4,8 @@ groq
 python-dotenv
 pypdf
 reportlab
-opencv-python
 redis
 chromadb
+#docker run -p 6379:6379 -d redis:7
+#REDIS_URL=redis://localhost:6379/0
+#SESSION_TTL_SECONDS=21600
