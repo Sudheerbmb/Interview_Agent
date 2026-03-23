@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insight — Technical Research Report</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111318;
+    --surface2: #181c23;
+    --border: #222830;
+    --accent: #4f9eff;
+    --accent2: #00e5a0;
+    --accent3: #ff6b35;
+    --accent4: #c77dff;
+    --text: #e8edf5;
+    --text-dim: #8892a4;
+    --text-muted: #4a5568;
+    --gold: #f0c040;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 300;
+    line-height: 1.7;
+    font-size: 15px;
+  }
+
+  /* ─── COVER PAGE ─── */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    padding: 4rem 2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .cover-bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 0%, rgba(79,158,255,0.08) 0%, transparent 70%),
+      radial-gradient(ellipse 60% 40% at 80% 100%, rgba(0,229,160,0.06) 0%, transparent 60%),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px),
+      repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(255,255,255,0.015) 39px, rgba(255,255,255,0.015) 40px);
+  }
+  .cover-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: var(--accent2);
+    border: 1px solid rgba(0,229,160,0.3);
+    padding: 5px 16px;
+    border-radius: 2px;
+    margin-bottom: 2.5rem;
+    position: relative;
+    z-index: 1;
+  }
+  .cover h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(3rem, 8vw, 6rem);
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    text-align: center;
+    position: relative; z-index: 1;
+    background: linear-gradient(135deg, #fff 0%, var(--accent) 60%, var(--accent2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1rem;
+  }
+  .cover-subtitle {
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: clamp(1rem, 2.5vw, 1.4rem);
+    color: var(--text-dim);
+    text-align: center;
+    position: relative; z-index: 1;
+    margin-bottom: 3rem;
+  }
+  .cover-meta {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative; z-index: 1;
+    margin-bottom: 3rem;
+  }
+  .cover-meta-item {
+    text-align: center;
+    padding: 1rem 1.5rem;
+    border: 1px solid var(--border);
+    background: rgba(255,255,255,0.02);
+    min-width: 120px;
+  }
+  .cover-meta-item .val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--accent);
+  }
+  .cover-meta-item .label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+  .cover-line {
+    width: 80px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    margin: 0 auto 2rem;
+  }
+  .cover-abstract {
+    max-width: 680px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.8;
+    position: relative; z-index: 1;
+    border-left: 2px solid var(--accent);
+    border-right: 2px solid var(--accent);
+    padding: 1.5rem 2rem;
+    background: rgba(79,158,255,0.03);
+  }
+  .cover-abstract strong { color: var(--text); font-weight: 500; }
+
+  /* ─── LAYOUT ─── */
+  .doc {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  /* ─── TOC ─── */
+  .toc {
+    padding: 4rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .toc h2 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.25em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+  }
+  .toc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+  .toc-item {
+    background: var(--surface);
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    text-decoration: none;
+    color: var(--text-dim);
+    transition: all 0.2s;
+  }
+  .toc-item:hover { background: var(--surface2); color: var(--accent); }
+  .toc-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    min-width: 20px;
+  }
+  .toc-text { font-size: 13px; }
+
+  /* ─── SECTIONS ─── */
+  .section {
+    padding: 5rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  .section-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+  .section h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(1.5rem, 3vw, 2.2rem);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+  .section h3 {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent2);
+    margin: 2.5rem 0 1rem;
+  }
+  .section p {
+    color: var(--text-dim);
+    max-width: 750px;
+    margin-bottom: 1.2rem;
+  }
+  .section p strong { color: var(--text); font-weight: 500; }
+
+  /* ─── ARCH DIAGRAM ─── */
+  .arch-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2.5rem;
+    margin: 2rem 0;
+    overflow-x: auto;
+  }
+  .arch-diagram svg {
+    width: 100%;
+    min-width: 700px;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+  }
+
+  /* ─── AGENT CARDS ─── */
+  .agents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 2rem 0;
+  }
+  .agent-card {
+    background: var(--surface);
+    padding: 1.75rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .agent-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .agent-card.profiler::before { background: var(--accent); }
+  .agent-card.grader::before { background: var(--accent3); }
+  .agent-card.interviewer::before { background: var(--accent2); }
+  .agent-card.feedback::before { background: var(--accent4); }
+  .agent-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    margin-bottom: 1rem;
+  }
+  .agent-card.profiler .agent-icon { background: rgba(79,158,255,0.12); }
+  .agent-card.grader .agent-icon { background: rgba(255,107,53,0.12); }
+  .agent-card.interviewer .agent-icon { background: rgba(0,229,160,0.12); }
+  .agent-card.feedback .agent-icon { background: rgba(199,125,255,0.12); }
+  .agent-card h4 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+  .agent-card.profiler h4 { color: var(--accent); }
+  .agent-card.grader h4 { color: var(--accent3); }
+  .agent-card.interviewer h4 { color: var(--accent2); }
+  .agent-card.feedback h4 { color: var(--accent4); }
+  .agent-card p { font-size: 13px; color: var(--text-dim); margin: 0; max-width: none; }
+  .agent-stat {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .agent-stat span { color: var(--text-dim); }
+
+  /* ─── TECH STACK ─── */
+  .tech-stack {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin: 2rem 0;
+  }
+  .tech-group {
+    border: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .tech-group-header {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .tech-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.9rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .tech-item:last-child { border-bottom: none; }
+  .tech-logo {
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+    font-weight: 700;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+  .tech-info { flex: 1; min-width: 0; }
+  .tech-name {
+    font-weight: 500;
+    font-size: 13px;
+    margin-bottom: 2px;
+  }
+  .tech-desc { font-size: 11px; color: var(--text-muted); }
+  .tech-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    letter-spacing: 0.08em;
+    flex-shrink: 0;
+  }
+
+  /* Tech colors */
+  .t-flask { background: rgba(0,229,160,0.12); color: var(--accent2); }
+  .t-groq { background: rgba(79,158,255,0.12); color: var(--accent); }
+  .t-redis { background: rgba(255,80,80,0.15); color: #ff6b6b; }
+  .t-chroma { background: rgba(199,125,255,0.12); color: var(--accent4); }
+  .t-python { background: rgba(255,214,0,0.12); color: #ffd600; }
+  .t-docker { background: rgba(29,155,240,0.12); color: #1d9bf0; }
+  .t-js { background: rgba(240,195,0,0.12); color: #f0c300; }
+  .t-tailwind { background: rgba(6,182,212,0.12); color: #06b6d4; }
+  .t-ws { background: rgba(255,107,53,0.12); color: var(--accent3); }
+  .t-web-speech { background: rgba(0,229,160,0.08); color: var(--accent2); }
+  .t-core { background: rgba(255,255,255,0.06); color: var(--text-dim); }
+  .t-required { background: rgba(255,80,80,0.12); color: #ff8080; }
+  .t-optional { background: rgba(79,158,255,0.1); color: var(--accent); }
+
+  /* ─── SCORING TABLE ─── */
+  .score-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.5rem 0;
+    font-size: 13px;
+  }
+  .score-table th {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .score-table td {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-dim);
+    vertical-align: top;
+  }
+  .score-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .score-pct {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--accent);
+  }
+  .score-bar {
+    width: 80px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-top: 4px;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  /* ─── PHASE TIMELINE ─── */
+  .phase-timeline {
+    display: flex;
+    gap: 0;
+    margin: 2rem 0;
+    border: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .phase-item {
+    flex: 1;
+    padding: 1.25rem 1rem;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    text-align: center;
+    position: relative;
+  }
+  .phase-item:last-child { border-right: none; }
+  .phase-item::after {
+    content: '→';
+    position: absolute;
+    right: -10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 12px;
+    z-index: 1;
+  }
+  .phase-item:last-child::after { display: none; }
+  .phase-num {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.4rem;
+  }
+  .phase-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 0.25rem;
+  }
+  .phase-qs {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+  }
+
+  /* ─── CALLOUT ─── */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: rgba(79,158,255,0.05);
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 0;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .callout.green { border-color: var(--accent2); background: rgba(0,229,160,0.04); }
+  .callout.orange { border-color: var(--accent3); background: rgba(255,107,53,0.04); }
+  .callout strong { color: var(--text); font-weight: 500; }
+
+  /* ─── CODE BLOCK ─── */
+  .code-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1.5rem;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: #c9d1d9;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+    line-height: 1.6;
+  }
+  .code-block .kw { color: #ff7b72; }
+  .code-block .str { color: #a5d6ff; }
+  .code-block .cm { color: #8b949e; }
+  .code-block .fn { color: #d2a8ff; }
+  .code-block .num { color: #79c0ff; }
+
+  /* ─── SESSION STATE ─── */
+  .session-state {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 1.5rem 0;
+  }
+  .ss-item {
+    background: var(--surface);
+    padding: 0.9rem 1rem;
+  }
+  .ss-key {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    margin-bottom: 3px;
+  }
+  .ss-type {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ─── ROLES GRID ─── */
+  .roles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: 1.5rem 0;
+  }
+  .role-item {
+    background: var(--surface);
+    padding: 0.75rem 1rem;
+    font-size: 12px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .role-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent2);
+    flex-shrink: 0;
+  }
+
+  /* ─── SECURITY GRID ─── */
+  .security-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 2rem 0;
+  }
+  .security-item {
+    border: 1px solid var(--border);
+    padding: 1.25rem;
+    background: var(--surface);
+  }
+  .security-item h5 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent3);
+    margin-bottom: 0.5rem;
+  }
+  .security-item p { font-size: 12px; color: var(--text-dim); max-width: none; margin: 0; }
+
+  /* ─── FOOTER ─── */
+  .footer {
+    padding: 3rem 0;
+    text-align: center;
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ─── PRINT ─── */
+  @media print {
+    body { background: white; color: black; }
+  }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .cover > * { animation: fadeIn 0.7s ease both; }
+  .cover > *:nth-child(2) { animation-delay: 0.1s; }
+  .cover > *:nth-child(3) { animation-delay: 0.2s; }
+  .cover > *:nth-child(4) { animation-delay: 0.3s; }
+  .cover > *:nth-child(5) { animation-delay: 0.4s; }
+  .cover > *:nth-child(6) { animation-delay: 0.5s; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════ COVER ══════════════════════════════ -->
+<div class="cover">
+  <div class="cover-bg"></div>
+  <div class="cover-badge">TECHNICAL RESEARCH REPORT · 2025</div>
+  <h1>Insight</h1>
+  <p class="cover-subtitle">AI-Powered Interview Practice Partner — Architecture & Design Analysis</p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item"><div class="val">4</div><div class="label">AI Agents</div></div>
+    <div class="cover-meta-item"><div class="val">~4K</div><div class="label">Lines of Code</div></div>
+    <div class="cover-meta-item"><div class="val">12</div><div class="label">Role Profiles</div></div>
+    <div class="cover-meta-item"><div class="val">5</div><div class="label">Phase Flow</div></div>
+    <div class="cover-meta-item"><div class="val">RT</div><div class="label">Streaming</div></div>
+  </div>
+
+  <div class="cover-line"></div>
+
+  <div class="cover-abstract">
+    This report presents a comprehensive architectural and technical analysis of <strong>Insight</strong>, a multi-agent AI interview simulation platform. The system orchestrates four specialized LLM agents — a behavioral profiler, a scoring grader, a dynamic interviewer, and a feedback synthesizer — over a real-time WebSocket/SSE communication layer, backed by Redis session memory and ChromaDB vector retrieval. The document covers system design rationale, data-flow topology, technology selection justifications, security architecture, and scalability considerations.
+  </div>
+</div>
+
+<!-- ══════════════════════════════ BODY ══════════════════════════════ -->
+<div class="doc">
+
+<!-- ─── TOC ─── -->
+<div class="toc" id="toc">
+  <h2>Table of Contents</h2>
+  <div class="toc-grid">
+    <a href="#s1" class="toc-item"><span class="toc-num">01</span><span class="toc-text">System Overview & Vision</span></a>
+    <a href="#s2" class="toc-item"><span class="toc-num">02</span><span class="toc-text">High-Level Architecture</span></a>
+    <a href="#s3" class="toc-item"><span class="toc-num">03</span><span class="toc-text">Multi-Agent System Design</span></a>
+    <a href="#s4" class="toc-item"><span class="toc-num">04</span><span class="toc-text">Technology Stack & Rationale</span></a>
+    <a href="#s5" class="toc-item"><span class="toc-num">05</span><span class="toc-text">Data Flow & Session State</span></a>
+    <a href="#s6" class="toc-item"><span class="toc-num">06</span><span class="toc-text">Interview Phase Engine</span></a>
+    <a href="#s7" class="toc-item"><span class="toc-num">07</span><span class="toc-text">Evaluation & Scoring Model</span></a>
+    <a href="#s8" class="toc-item"><span class="toc-num">08</span><span class="toc-text">Security Architecture</span></a>
+    <a href="#s9" class="toc-item"><span class="toc-num">09</span><span class="toc-text">Scalability & Deployment</span></a>
+    <a href="#s10" class="toc-item"><span class="toc-num">10</span><span class="toc-text">Conclusion</span></a>
+  </div>
+</div>
+
+<!-- ─── §1 OVERVIEW ─── -->
+<div class="section" id="s1">
+  <div class="section-header">
+    <span class="section-num">§ 01</span>
+    <h2>System Overview & Vision</h2>
+  </div>
+
+  <p><strong>Insight</strong> is a role-based AI interview simulation platform designed to provide candidates with realistic, adaptive, and analytically rich mock interview experiences — without requiring human interviewers. The system addresses a critical accessibility gap: high-quality interview coaching has historically required costly human experts or employer-sponsored programs.</p>
+
+  <p>The platform accepts a candidate's resume (PDF) and a job description, then orchestrates an end-to-end interview session through a coordinated pipeline of four specialized LLM agents. Each agent has a distinct cognitive responsibility — behavioral profiling, response grading, question generation, and post-session feedback synthesis — mirroring the way real-world assessment panels divide evaluation labor.</p>
+
+  <div class="callout">
+    <strong>Core Innovation:</strong> Rather than a single monolithic LLM prompt trying to simultaneously conduct an interview, score responses, detect behavioral patterns, and generate feedback, Insight decomposes these concerns into isolated, specialized agents. This enables deeper per-dimension reasoning and richer, more consistent output quality.
+  </div>
+
+  <h3>Problem Statement</h3>
+  <p>Technical interviews at top companies demand preparation across multiple axes simultaneously — algorithmic fluency, systems thinking, behavioral communication, and role-specific domain knowledge. Existing preparation tools typically address only one axis (e.g., LeetCode for algorithms). Insight provides a unified, adaptive environment that evaluates all dimensions in a realistic conversational format.</p>
+
+  <h3>Supported Target Roles</h3>
+  <div class="roles-grid">
+    <div class="role-item"><span class="role-dot"></span>Software Engineer</div>
+    <div class="role-item"><span class="role-dot"></span>Data Scientist</div>
+    <div class="role-item"><span class="role-dot"></span>ML Engineer</div>
+    <div class="role-item"><span class="role-dot"></span>Product Manager</div>
+    <div class="role-item"><span class="role-dot"></span>DevOps Engineer</div>
+    <div class="role-item"><span class="role-dot"></span>Data Engineer</div>
+    <div class="role-item"><span class="role-dot"></span>Frontend Engineer</div>
+    <div class="role-item"><span class="role-dot"></span>Backend Engineer</div>
+    <div class="role-item"><span class="role-dot"></span>QA Engineer</div>
+    <div class="role-item"><span class="role-dot"></span>Security Engineer</div>
+    <div class="role-item"><span class="role-dot"></span>Cloud Architect</div>
+    <div class="role-item"><span class="role-dot"></span>Sales Engineer</div>
+  </div>
+</div>
+
+<!-- ─── §2 HIGH-LEVEL ARCHITECTURE ─── -->
+<div class="section" id="s2">
+  <div class="section-header">
+    <span class="section-num">§ 02</span>
+    <h2>High-Level Architecture</h2>
+  </div>
+
+  <p>The system is organized into three principal tiers: a browser-based single-page frontend, a Flask application server hosting the multi-agent orchestration logic, and a persistence/inference layer composed of Redis, ChromaDB, and the Groq inference API. Real-time streaming is achieved via WebSocket and Server-Sent Events (SSE) channels.</p>
+
+  <div class="arch-diagram">
+    <svg viewBox="0 0 900 560" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
+      <defs>
+        <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#4f9eff" opacity="0.7"/>
+        </marker>
+        <marker id="arrow2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#00e5a0" opacity="0.7"/>
+        </marker>
+        <filter id="glow">
+          <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+          <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <!-- Grid bg -->
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+        </pattern>
+      </defs>
+
+      <rect width="900" height="560" fill="#111318" rx="2"/>
+      <rect width="900" height="560" fill="url(#grid)" rx="2"/>
+
+      <!-- TIER LABELS -->
+      <text x="14" y="110" fill="#2a3040" font-size="9" letter-spacing="2" transform="rotate(-90,14,110)">FRONTEND TIER</text>
+      <text x="14" y="310" fill="#2a3040" font-size="9" letter-spacing="2" transform="rotate(-90,14,310)">APPLICATION TIER</text>
+      <text x="14" y="490" fill="#2a3040" font-size="9" letter-spacing="2" transform="rotate(-90,14,490)">DATA / INFERENCE TIER</text>
+
+      <!-- ── FRONTEND BOX ── -->
+      <rect x="40" y="30" width="820" height="130" rx="4" fill="rgba(79,158,255,0.04)" stroke="#4f9eff" stroke-width="0.5" stroke-dasharray="4,3"/>
+      <text x="54" y="50" fill="#4f9eff" font-size="9" letter-spacing="2">BROWSER SPA</text>
+
+      <!-- Browser components -->
+      <!-- HTML/JS/CSS Block -->
+      <rect x="60" y="60" width="140" height="80" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="72" y="82" fill="#6b7a99" font-size="8" letter-spacing="1">INTERFACE</text>
+      <text x="72" y="100" fill="#e8edf5" font-size="11" font-weight="500">Vanilla JS</text>
+      <text x="72" y="116" fill="#6b7a99" font-size="9">+ Tailwind CSS</text>
+      <text x="72" y="130" fill="#6b7a99" font-size="9">1,644 lines SPA</text>
+
+      <!-- Voice I/O -->
+      <rect x="220" y="60" width="130" height="80" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="232" y="82" fill="#6b7a99" font-size="8" letter-spacing="1">VOICE I/O</text>
+      <text x="232" y="100" fill="#e8edf5" font-size="11" font-weight="500">Web Speech</text>
+      <text x="232" y="116" fill="#6b7a99" font-size="9">SpeechRecognition</text>
+      <text x="232" y="130" fill="#6b7a99" font-size="9">SpeechSynthesis</text>
+
+      <!-- Analytics -->
+      <rect x="370" y="60" width="130" height="80" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="382" y="82" fill="#6b7a99" font-size="8" letter-spacing="1">ANALYTICS</text>
+      <text x="382" y="100" fill="#e8edf5" font-size="11" font-weight="500">Score Charts</text>
+      <text x="382" y="116" fill="#6b7a99" font-size="9">Skill Breakdown</text>
+      <text x="382" y="130" fill="#6b7a99" font-size="9">Trend Tracking</text>
+
+      <!-- Coding UI -->
+      <rect x="520" y="60" width="130" height="80" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="532" y="82" fill="#6b7a99" font-size="8" letter-spacing="1">CODE EDITOR</text>
+      <text x="532" y="100" fill="#e8edf5" font-size="11" font-weight="500">LeetCode-style</text>
+      <text x="532" y="116" fill="#6b7a99" font-size="9">Multi-language</text>
+      <text x="532" y="130" fill="#6b7a99" font-size="9">Test runner UI</text>
+
+      <!-- Export -->
+      <rect x="670" y="60" width="160" height="80" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="682" y="82" fill="#6b7a99" font-size="8" letter-spacing="1">EXPORT</text>
+      <text x="682" y="100" fill="#e8edf5" font-size="11" font-weight="500">Transcript / PDF</text>
+      <text x="682" y="116" fill="#6b7a99" font-size="9">JSON / TXT export</text>
+      <text x="682" y="130" fill="#6b7a99" font-size="9">Session snapshots</text>
+
+      <!-- WS + SSE arrows down -->
+      <line x1="200" y1="160" x2="200" y2="200" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.6"/>
+      <text x="150" y="185" fill="#4f9eff" font-size="8">WebSocket</text>
+
+      <line x1="450" y1="160" x2="450" y2="200" stroke="#00e5a0" stroke-width="1.5" marker-end="url(#arrow2)" opacity="0.6" stroke-dasharray="4,2"/>
+      <text x="460" y="185" fill="#00e5a0" font-size="8">SSE Stream</text>
+
+      <!-- ── APP SERVER ── -->
+      <rect x="40" y="200" width="820" height="140" rx="4" fill="rgba(0,229,160,0.03)" stroke="#00e5a0" stroke-width="0.5" stroke-dasharray="4,3"/>
+      <text x="54" y="220" fill="#00e5a0" font-size="9" letter-spacing="2">FLASK APPLICATION SERVER  ·  app.py (1,888 lines)</text>
+
+      <!-- Router -->
+      <rect x="60" y="228" width="120" height="98" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="72" y="248" fill="#6b7a99" font-size="8" letter-spacing="1">ROUTER</text>
+      <text x="72" y="264" fill="#e8edf5" font-size="10">/upload-context</text>
+      <text x="72" y="278" fill="#e8edf5" font-size="10">/chat</text>
+      <text x="72" y="292" fill="#e8edf5" font-size="10">/chat/sse</text>
+      <text x="72" y="306" fill="#e8edf5" font-size="10">/ws/chat</text>
+
+      <!-- Orchestrator -->
+      <rect x="200" y="228" width="155" height="98" rx="3" fill="#181c23" stroke="#4f9eff" stroke-width="1.5" filter="url(#glow)"/>
+      <text x="212" y="248" fill="#4f9eff" font-size="8" letter-spacing="1">ORCHESTRATOR</text>
+      <text x="212" y="264" fill="#e8edf5" font-size="10" font-weight="500">Agent Coordinator</text>
+      <text x="212" y="278" fill="#6b7a99" font-size="9">Session Manager</text>
+      <text x="212" y="292" fill="#6b7a99" font-size="9">Context Builder</text>
+      <text x="212" y="306" fill="#6b7a99" font-size="9">Stream Handler</text>
+
+      <!-- Code sandbox -->
+      <rect x="375" y="228" width="140" height="98" rx="3" fill="#181c23" stroke="#ff6b35" stroke-width="1"/>
+      <text x="387" y="248" fill="#ff6b35" font-size="8" letter-spacing="1">CODE SANDBOX</text>
+      <text x="387" y="264" fill="#e8edf5" font-size="10" font-weight="500">Safe Exec Engine</text>
+      <text x="387" y="278" fill="#6b7a99" font-size="9">Restricted builtins</text>
+      <text x="387" y="292" fill="#6b7a99" font-size="9">Test harness</text>
+      <text x="387" y="306" fill="#6b7a99" font-size="9">AST sanitizer</text>
+
+      <!-- File processor -->
+      <rect x="535" y="228" width="140" height="98" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="547" y="248" fill="#6b7a99" font-size="8" letter-spacing="1">FILE PROCESSOR</text>
+      <text x="547" y="264" fill="#e8edf5" font-size="10" font-weight="500">PDF Parser</text>
+      <text x="547" y="278" fill="#6b7a99" font-size="9">PyPDF extraction</text>
+      <text x="547" y="292" fill="#6b7a99" font-size="9">Text chunking</text>
+      <text x="547" y="306" fill="#6b7a99" font-size="9">ReportLab export</text>
+
+      <!-- Session mgr -->
+      <rect x="695" y="228" width="140" height="98" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="707" y="248" fill="#6b7a99" font-size="8" letter-spacing="1">SESSION MGR</text>
+      <text x="707" y="264" fill="#e8edf5" font-size="10" font-weight="500">State Machine</text>
+      <text x="707" y="278" fill="#6b7a99" font-size="9">Redis R/W</text>
+      <text x="707" y="292" fill="#6b7a99" font-size="9">TTL management</text>
+      <text x="707" y="306" fill="#6b7a99" font-size="9">In-mem fallback</text>
+
+      <!-- Arrows down to data tier -->
+      <line x1="275" y1="340" x2="275" y2="385" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.5"/>
+      <line x1="450" y1="340" x2="450" y2="385" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.5"/>
+      <line x1="600" y1="340" x2="600" y2="385" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.5"/>
+      <line x1="765" y1="340" x2="765" y2="385" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#arrow)" opacity="0.5"/>
+
+      <!-- ── DATA TIER ── -->
+      <rect x="40" y="385" width="820" height="140" rx="4" fill="rgba(199,125,255,0.03)" stroke="#c77dff" stroke-width="0.5" stroke-dasharray="4,3"/>
+      <text x="54" y="404" fill="#c77dff" font-size="9" letter-spacing="2">PERSISTENCE &amp; INFERENCE LAYER</text>
+
+      <!-- Groq -->
+      <rect x="60" y="412" width="170" height="98" rx="3" fill="#181c23" stroke="#4f9eff" stroke-width="1.5" filter="url(#glow)"/>
+      <text x="72" y="432" fill="#4f9eff" font-size="8" letter-spacing="1">GROQ INFERENCE API</text>
+      <text x="72" y="450" fill="#e8edf5" font-size="12" font-weight="500">LLaMA / Mixtral</text>
+      <text x="72" y="468" fill="#6b7a99" font-size="9">Streaming inference</text>
+      <text x="72" y="482" fill="#6b7a99" font-size="9">Multi-agent calls</text>
+      <text x="72" y="496" fill="#6b7a99" font-size="9">≪ 1s latency</text>
+
+      <!-- Redis -->
+      <rect x="250" y="412" width="160" height="98" rx="3" fill="#181c23" stroke="#ff6b6b" stroke-width="1"/>
+      <text x="262" y="432" fill="#ff6b6b" font-size="8" letter-spacing="1">REDIS 7</text>
+      <text x="262" y="450" fill="#e8edf5" font-size="12" font-weight="500">Session State</text>
+      <text x="262" y="468" fill="#6b7a99" font-size="9">In-memory KV</text>
+      <text x="262" y="482" fill="#6b7a99" font-size="9">TTL: 6hr default</text>
+      <text x="262" y="496" fill="#6b7a99" font-size="9">Graceful fallback</text>
+
+      <!-- ChromaDB -->
+      <rect x="430" y="412" width="170" height="98" rx="3" fill="#181c23" stroke="#c77dff" stroke-width="1"/>
+      <text x="442" y="432" fill="#c77dff" font-size="8" letter-spacing="1">CHROMADB</text>
+      <text x="442" y="450" fill="#e8edf5" font-size="12" font-weight="500">Vector Store</text>
+      <text x="442" y="468" fill="#6b7a99" font-size="9">Resume embeddings</text>
+      <text x="442" y="482" fill="#6b7a99" font-size="9">JD embeddings</text>
+      <text x="442" y="496" fill="#6b7a99" font-size="9">Semantic retrieval</text>
+
+      <!-- Filesystem -->
+      <rect x="620" y="412" width="220" height="98" rx="3" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="632" y="432" fill="#6b7a99" font-size="8" letter-spacing="1">FILESYSTEM</text>
+      <text x="632" y="450" fill="#e8edf5" font-size="12" font-weight="500">Local Storage</text>
+      <text x="632" y="468" fill="#6b7a99" font-size="9">Uploaded PDFs (temp)</text>
+      <text x="632" y="482" fill="#6b7a99" font-size="9">ChromaDB persist dir</text>
+      <text x="632" y="496" fill="#6b7a99" font-size="9">Export files</text>
+
+      <!-- Legend -->
+      <line x1="60" y1="548" x2="90" y2="548" stroke="#4f9eff" stroke-width="1.5" opacity="0.6"/>
+      <text x="96" y="552" fill="#4f9eff" font-size="9">WebSocket / SSE</text>
+      <line x1="200" y1="548" x2="230" y2="548" stroke="#4f9eff" stroke-width="1" opacity="0.5" stroke-dasharray="3,2"/>
+      <text x="236" y="552" fill="#6b7a99" font-size="9">Internal API call</text>
+    </svg>
+  </div>
+
+  <div class="callout green">
+    <strong>Graceful Degradation:</strong> Redis and ChromaDB are both optional. The application falls back to in-memory session storage if Redis is unavailable, and simply skips semantic context retrieval if ChromaDB is absent. This means the core interview loop runs with zero external infrastructure beyond a Groq API key.
+  </div>
+</div>
+
+<!-- ─── §3 MULTI-AGENT SYSTEM ─── -->
+<div class="section" id="s3">
+  <div class="section-header">
+    <span class="section-num">§ 03</span>
+    <h2>Multi-Agent System Design</h2>
+  </div>
+
+  <p>The multi-agent architecture is the central architectural decision of Insight. Each agent is an independent class consuming a shared Groq client, with its own system prompt, evaluation schema, and output contract. The orchestrator in <code>app.py</code> sequences agent calls on each user response turn.</p>
+
+  <div class="arch-diagram">
+    <svg viewBox="0 0 860 340" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
+      <defs>
+        <marker id="a1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#4f9eff" opacity="0.8"/>
+        </marker>
+        <marker id="a2" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#00e5a0" opacity="0.8"/>
+        </marker>
+        <marker id="a3" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L8,3 z" fill="#c77dff" opacity="0.8"/>
+        </marker>
+        <pattern id="grid2" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+        </pattern>
+        <filter id="glow2"><feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+          <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <rect width="860" height="340" fill="#111318" rx="2"/>
+      <rect width="860" height="340" fill="url(#grid2)" rx="2"/>
+
+      <!-- USER INPUT -->
+      <rect x="30" y="140" width="110" height="60" rx="4" fill="#181c23" stroke="#4f9eff" stroke-width="1.5"/>
+      <text x="85" y="165" fill="#4f9eff" font-size="9" text-anchor="middle" letter-spacing="1">USER INPUT</text>
+      <text x="85" y="183" fill="#e8edf5" font-size="10" text-anchor="middle">Answer text</text>
+
+      <!-- Arrow to orchestrator -->
+      <line x1="140" y1="170" x2="185" y2="170" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#a1)"/>
+
+      <!-- ORCHESTRATOR -->
+      <rect x="185" y="120" width="130" height="100" rx="4" fill="#181c23" stroke="#00e5a0" stroke-width="2" filter="url(#glow2)"/>
+      <text x="250" y="145" fill="#00e5a0" font-size="8" text-anchor="middle" letter-spacing="1.5">ORCHESTRATOR</text>
+      <text x="250" y="161" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">app.py</text>
+      <text x="250" y="177" fill="#6b7a99" font-size="8" text-anchor="middle">Sequences agents</text>
+      <text x="250" y="192" fill="#6b7a99" font-size="8" text-anchor="middle">Merges context</text>
+      <text x="250" y="207" fill="#6b7a99" font-size="8" text-anchor="middle">Streams response</text>
+
+      <!-- Arrows UP/DOWN from orchestrator to agents -->
+      <!-- Profiler arrow up -->
+      <line x1="250" y1="120" x2="250" y2="65" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#a1)" opacity="0.7"/>
+      <!-- Grader arrow up-right -->
+      <line x1="315" y1="150" x2="430" y2="100" stroke="#ff6b35" stroke-width="1.5" marker-end="url(#a1)" opacity="0.7"/>
+      <!-- Interviewer arrow right -->
+      <line x1="315" y1="170" x2="430" y2="170" stroke="#00e5a0" stroke-width="1.5" marker-end="url(#a2)" opacity="0.7"/>
+      <!-- Feedback arrow down-right -->
+      <line x1="315" y1="190" x2="430" y2="250" stroke="#c77dff" stroke-width="1.5" marker-end="url(#a3)" opacity="0.7"/>
+
+      <!-- PROFILER -->
+      <rect x="370" y="22" width="155" height="90" rx="4" fill="#181c23" stroke="#4f9eff" stroke-width="1.5"/>
+      <text x="447" y="42" fill="#4f9eff" font-size="8" text-anchor="middle" letter-spacing="1.5">PROFILER AGENT</text>
+      <text x="447" y="58" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">profiler.py · 244L</text>
+      <text x="447" y="72" fill="#6b7a99" font-size="8" text-anchor="middle">Behavioral analysis</text>
+      <text x="447" y="86" fill="#6b7a99" font-size="8" text-anchor="middle">Persona detection</text>
+      <text x="447" y="100" fill="#6b7a99" font-size="8" text-anchor="middle">Red flag detection</text>
+
+      <!-- GRADER -->
+      <rect x="540" y="62" width="155" height="90" rx="4" fill="#181c23" stroke="#ff6b35" stroke-width="1.5"/>
+      <text x="617" y="82" fill="#ff6b35" font-size="8" text-anchor="middle" letter-spacing="1.5">GRADER AGENT</text>
+      <text x="617" y="98" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">grader.py · 318L</text>
+      <text x="617" y="112" fill="#6b7a99" font-size="8" text-anchor="middle">4-dim scoring</text>
+      <text x="617" y="126" fill="#6b7a99" font-size="8" text-anchor="middle">Trend analysis</text>
+      <text x="617" y="140" fill="#6b7a99" font-size="8" text-anchor="middle">Weighted 0-100</text>
+
+      <!-- INTERVIEWER -->
+      <rect x="540" y="132" width="155" height="90" rx="4" fill="#181c23" stroke="#00e5a0" stroke-width="1.5"/>
+      <text x="617" y="152" fill="#00e5a0" font-size="8" text-anchor="middle" letter-spacing="1.5">INTERVIEWER AGENT</text>
+      <text x="617" y="168" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">interviewer.py · 453L</text>
+      <text x="617" y="182" fill="#6b7a99" font-size="8" text-anchor="middle">Adaptive Q-gen</text>
+      <text x="617" y="196" fill="#6b7a99" font-size="8" text-anchor="middle">Phase manager</text>
+      <text x="617" y="210" fill="#6b7a99" font-size="8" text-anchor="middle">Streaming "Byte"</text>
+
+      <!-- FEEDBACK -->
+      <rect x="540" y="205" width="155" height="90" rx="4" fill="#181c23" stroke="#c77dff" stroke-width="1.5"/>
+      <text x="617" y="225" fill="#c77dff" font-size="8" text-anchor="middle" letter-spacing="1.5">FEEDBACK AGENT</text>
+      <text x="617" y="241" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">feedback_gen.py · 158L</text>
+      <text x="617" y="255" fill="#6b7a99" font-size="8" text-anchor="middle">Executive summary</text>
+      <text x="617" y="269" fill="#6b7a99" font-size="8" text-anchor="middle">STAR evaluation</text>
+      <text x="617" y="283" fill="#6b7a99" font-size="8" text-anchor="middle">Action roadmap</text>
+
+      <!-- Arrow from Grader back to Orchestrator result -->
+      <line x1="695" y1="107" x2="760" y2="107" stroke="#ff6b35" stroke-width="1" stroke-dasharray="3,2" opacity="0.5" marker-end="url(#a1)"/>
+      <line x1="695" y1="177" x2="760" y2="177" stroke="#00e5a0" stroke-width="1" stroke-dasharray="3,2" opacity="0.5" marker-end="url(#a2)"/>
+      <!-- JSON RESULT box -->
+      <rect x="755" y="80" width="90" height="120" rx="3" fill="#0d1117" stroke="#2a3040" stroke-width="1"/>
+      <text x="800" y="100" fill="#6b7a99" font-size="8" text-anchor="middle">JSON</text>
+      <text x="800" y="114" fill="#4f9eff" font-size="8" text-anchor="middle">score</text>
+      <text x="800" y="128" fill="#ff6b35" font-size="8" text-anchor="middle">persona</text>
+      <text x="800" y="142" fill="#00e5a0" font-size="8" text-anchor="middle">next_q</text>
+      <text x="800" y="156" fill="#c77dff" font-size="8" text-anchor="middle">feedback</text>
+      <text x="800" y="170" fill="#6b7a99" font-size="8" text-anchor="middle">red_flags</text>
+      <text x="800" y="184" fill="#6b7a99" font-size="8" text-anchor="middle">sentiment</text>
+
+      <!-- Arrow result back to user -->
+      <line x1="185" y1="195" x2="140" y2="220" stroke="#00e5a0" stroke-width="1.5" stroke-dasharray="3,2" opacity="0.6"/>
+      <rect x="30" y="220" width="110" height="60" rx="4" fill="#181c23" stroke="#00e5a0" stroke-width="1"/>
+      <text x="85" y="245" fill="#00e5a0" font-size="9" text-anchor="middle" letter-spacing="1">STREAM OUT</text>
+      <text x="85" y="263" fill="#e8edf5" font-size="9" text-anchor="middle">WS / SSE</text>
+
+      <!-- GROQ cloud ref -->
+      <rect x="370" y="290" width="230" height="36" rx="3" fill="#0d1117" stroke="#4f9eff" stroke-width="0.5" stroke-dasharray="3,2"/>
+      <text x="485" y="308" fill="#4f9eff" font-size="9" text-anchor="middle">⚡  All agents → Groq Inference API</text>
+      <text x="485" y="322" fill="#6b7a99" font-size="8" text-anchor="middle">Shared Groq client · Streaming completions</text>
+    </svg>
+  </div>
+
+  <h3>Agent Responsibilities</h3>
+  <div class="agents-grid">
+    <div class="agent-card profiler">
+      <div class="agent-icon">🧠</div>
+      <h4>Profiler Agent</h4>
+      <p>Analyzes behavioral patterns in each response. Detects persona archetype (confused, efficient, anxious, overconfident, chatty, silent, edge-case, normal), sentiment, and red flags like memorization or knowledge inconsistencies. Informs the Interviewer's adaptive strategy.</p>
+      <div class="agent-stat"><span>profiler.py</span> · 244 lines · JSON output contract</div>
+    </div>
+    <div class="agent-card grader">
+      <div class="agent-icon">📊</div>
+      <h4>Grader Agent</h4>
+      <p>Applies a weighted four-dimensional scoring rubric — Technical Accuracy (40%), Communication (25%), Problem Solving (20%), Relevance (15%) — against the current question, JD requirements, and candidate's resume. Maintains trend analysis across previous scores.</p>
+      <div class="agent-stat"><span>grader.py</span> · 318 lines · score ∈ [0,100]</div>
+    </div>
+    <div class="agent-card interviewer">
+      <div class="agent-icon">🎤</div>
+      <h4>Interviewer Agent</h4>
+      <p>The conversational core. Operates as "Byte", an elite senior technical recruiter persona. Generates contextually appropriate follow-up questions using profiler output, grader output, ChromaDB-retrieved context from the resume/JD, and the full conversation history. Streams token-by-token.</p>
+      <div class="agent-stat"><span>interviewer.py</span> · 453 lines · SSE/WS stream</div>
+    </div>
+    <div class="agent-card feedback">
+      <div class="agent-icon">📋</div>
+      <h4>Feedback Generator</h4>
+      <p>Produces a comprehensive post-interview report on demand: executive summary, performance breakdown per dimension, STAR-method behavioral evaluation, technical competency map, and an ordered list of improvement recommendations with concrete action items.</p>
+      <div class="agent-stat"><span>feedback_generator.py</span> · 158 lines · Markdown report</div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── §4 TECH STACK ─── -->
+<div class="section" id="s4">
+  <div class="section-header">
+    <span class="section-num">§ 04</span>
+    <h2>Technology Stack & Rationale</h2>
+  </div>
+
+  <p>Every technology in this stack was selected against explicit criteria — not default choices. The following matrix presents each tool, its role, and the reasoning that drove its selection over alternatives.</p>
+
+  <div class="tech-stack">
+    <!-- Backend -->
+    <div class="tech-group">
+      <div class="tech-group-header">Backend</div>
+      <div class="tech-item">
+        <div class="tech-logo t-python">Py</div>
+        <div class="tech-info">
+          <div class="tech-name">Python 3.9+</div>
+          <div class="tech-desc">Primary language; extensive ML/AI ecosystem, native LLM SDK support</div>
+        </div>
+        <span class="tech-badge t-core">CORE</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-flask">Fk</div>
+        <div class="tech-info">
+          <div class="tech-name">Flask + flask-sock</div>
+          <div class="tech-desc">Lightweight framework with no framework-imposed structure constraints. WebSocket via flask-sock, SSE via raw Response streaming. Rejected Django for overhead.</div>
+        </div>
+        <span class="tech-badge t-core">CORE</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-groq">G</div>
+        <div class="tech-info">
+          <div class="tech-name">Groq Inference API</div>
+          <div class="tech-desc">Sub-200ms token generation enables natural streaming conversation. Provides LLaMA 3 and Mixtral access. Critical for real-time feel — OpenAI-comparable quality at faster throughput.</div>
+        </div>
+        <span class="tech-badge t-required">REQUIRED</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-redis" style="font-size:10px;">RDB</div>
+        <div class="tech-info">
+          <div class="tech-name">Redis 7</div>
+          <div class="tech-desc">In-memory KV store for session state. Rich types (hashes, lists) match complex session schema. Automatic TTL prevents stale state. Runs in Docker with a single command.</div>
+        </div>
+        <span class="tech-badge t-optional">OPTIONAL</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-chroma">𝒞</div>
+        <div class="tech-info">
+          <div class="tech-name">ChromaDB</div>
+          <div class="tech-desc">Local-first vector database for resume and JD embedding storage. Enables semantic retrieval of relevant context for each interview question. Python-native, zero infrastructure required.</div>
+        </div>
+        <span class="tech-badge t-optional">OPTIONAL</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-python">PDF</div>
+        <div class="tech-info">
+          <div class="tech-name">PyPDF + ReportLab</div>
+          <div class="tech-desc">PyPDF for text extraction from uploaded resumes. ReportLab for structured PDF report generation. Both are pure-Python, no external binary dependencies.</div>
+        </div>
+        <span class="tech-badge t-optional">OPTIONAL</span>
+      </div>
+    </div>
+
+    <!-- Frontend -->
+    <div class="tech-group">
+      <div class="tech-group-header">Frontend</div>
+      <div class="tech-item">
+        <div class="tech-logo t-js">JS</div>
+        <div class="tech-info">
+          <div class="tech-name">Vanilla JavaScript (ES6+)</div>
+          <div class="tech-desc">No framework overhead. Direct WebSocket control. The app's real-time requirements are better served by raw event loops than React's reconciliation cycle. SPA pattern implemented from scratch.</div>
+        </div>
+        <span class="tech-badge t-core">CORE</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-tailwind">Tw</div>
+        <div class="tech-info">
+          <div class="tech-name">Tailwind CSS</div>
+          <div class="tech-desc">Utility-first approach enables rapid UI iteration. Zero custom CSS architecture to maintain. Tree-shaken bundles for production. Applied via CDN for simplicity.</div>
+        </div>
+        <span class="tech-badge t-core">CORE</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-ws">WS</div>
+        <div class="tech-info">
+          <div class="tech-name">WebSocket + SSE</div>
+          <div class="tech-desc">WebSocket (flask-sock) for bidirectional chat stream. SSE as a simpler unidirectional fallback for streaming token output. Both protocols ensure sub-second perceived latency.</div>
+        </div>
+        <span class="tech-badge t-core">CORE</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-web-speech">🎤</div>
+        <div class="tech-info">
+          <div class="tech-name">Web Speech API</div>
+          <div class="tech-desc">Native browser SpeechRecognition and SpeechSynthesis APIs. Zero cost, no third-party service, fully private (processed locally by browser). Multi-language capable.</div>
+        </div>
+        <span class="tech-badge t-core">NATIVE</span>
+      </div>
+    </div>
+
+    <!-- Infrastructure -->
+    <div class="tech-group">
+      <div class="tech-group-header">Infrastructure & DevOps</div>
+      <div class="tech-item">
+        <div class="tech-logo t-docker">🐳</div>
+        <div class="tech-info">
+          <div class="tech-name">Docker</div>
+          <div class="tech-desc">Containerizes the app for consistent environments. Redis and ChromaDB run as companion containers. Enables horizontal scaling via container orchestration.</div>
+        </div>
+        <span class="tech-badge t-optional">OPTIONAL</span>
+      </div>
+      <div class="tech-item">
+        <div class="tech-logo t-python">Env</div>
+        <div class="tech-info">
+          <div class="tech-name">python-dotenv</div>
+          <div class="tech-desc">.env-based configuration keeps secrets out of version control. Supports environment promotion (dev → staging → prod) without code changes.</div>
+        </div>
+        <span class="tech-badge t-core">CORE</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── §5 DATA FLOW ─── -->
+<div class="section" id="s5">
+  <div class="section-header">
+    <span class="section-num">§ 05</span>
+    <h2>Data Flow & Session State</h2>
+  </div>
+
+  <p>Each interview session is anchored to a unique <code>session_id</code>. State is persisted in Redis (or in-memory) and evolves through the lifecycle of the session. The following diagram shows the complete data flow from initial upload to response streaming.</p>
+
+  <div class="arch-diagram">
+    <svg viewBox="0 0 860 280" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
+      <defs>
+        <marker id="da" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L7,3 z" fill="#4f9eff" opacity="0.8"/>
+        </marker>
+        <pattern id="grid3" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+        </pattern>
+      </defs>
+      <rect width="860" height="280" fill="#111318" rx="2"/>
+      <rect width="860" height="280" fill="url(#grid3)" rx="2"/>
+
+      <!-- Steps as horizontal flow -->
+      <!-- Step 1 -->
+      <rect x="20" y="80" width="100" height="120" rx="4" fill="#181c23" stroke="#4f9eff" stroke-width="1.5"/>
+      <text x="70" y="102" fill="#4f9eff" font-size="8" text-anchor="middle">STEP 1</text>
+      <text x="70" y="118" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">Upload</text>
+      <text x="70" y="134" fill="#6b7a99" font-size="8" text-anchor="middle">PDF Resume</text>
+      <text x="70" y="148" fill="#6b7a99" font-size="8" text-anchor="middle">+ Job Desc</text>
+      <text x="70" y="162" fill="#6b7a99" font-size="8" text-anchor="middle">Role select</text>
+
+      <line x1="120" y1="140" x2="150" y2="140" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#da)"/>
+
+      <!-- Step 2 -->
+      <rect x="150" y="80" width="110" height="120" rx="4" fill="#181c23" stroke="#4f9eff" stroke-width="1.5"/>
+      <text x="205" y="102" fill="#4f9eff" font-size="8" text-anchor="middle">STEP 2</text>
+      <text x="205" y="118" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">Processing</text>
+      <text x="205" y="134" fill="#6b7a99" font-size="8" text-anchor="middle">PyPDF extract</text>
+      <text x="205" y="148" fill="#6b7a99" font-size="8" text-anchor="middle">Chunk + embed</text>
+      <text x="205" y="162" fill="#c77dff" font-size="8" text-anchor="middle">→ ChromaDB</text>
+      <text x="205" y="178" fill="#ff6b6b" font-size="8" text-anchor="middle">→ Redis state</text>
+
+      <line x1="260" y1="140" x2="290" y2="140" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#da)"/>
+
+      <!-- Step 3 -->
+      <rect x="290" y="80" width="110" height="120" rx="4" fill="#181c23" stroke="#00e5a0" stroke-width="1.5"/>
+      <text x="345" y="102" fill="#00e5a0" font-size="8" text-anchor="middle">STEP 3</text>
+      <text x="345" y="118" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">Per-Turn</text>
+      <text x="345" y="134" fill="#6b7a99" font-size="8" text-anchor="middle">Receive answer</text>
+      <text x="345" y="148" fill="#6b7a99" font-size="8" text-anchor="middle">Load session</text>
+      <text x="345" y="162" fill="#6b7a99" font-size="8" text-anchor="middle">Retrieve context</text>
+      <text x="345" y="178" fill="#6b7a99" font-size="8" text-anchor="middle">from ChromaDB</text>
+
+      <line x1="400" y1="140" x2="430" y2="140" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#da)"/>
+
+      <!-- Step 4 -->
+      <rect x="430" y="80" width="120" height="120" rx="4" fill="#181c23" stroke="#ff6b35" stroke-width="1.5"/>
+      <text x="490" y="102" fill="#ff6b35" font-size="8" text-anchor="middle">STEP 4</text>
+      <text x="490" y="118" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">Agent Pipeline</text>
+      <text x="490" y="134" fill="#4f9eff" font-size="8" text-anchor="middle">① Profiler</text>
+      <text x="490" y="148" fill="#ff6b35" font-size="8" text-anchor="middle">② Grader</text>
+      <text x="490" y="162" fill="#00e5a0" font-size="8" text-anchor="middle">③ Interviewer</text>
+      <text x="490" y="178" fill="#6b7a99" font-size="8" text-anchor="middle">→ Groq API</text>
+
+      <line x1="550" y1="140" x2="580" y2="140" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#da)"/>
+
+      <!-- Step 5 -->
+      <rect x="580" y="80" width="110" height="120" rx="4" fill="#181c23" stroke="#00e5a0" stroke-width="1.5"/>
+      <text x="635" y="102" fill="#00e5a0" font-size="8" text-anchor="middle">STEP 5</text>
+      <text x="635" y="118" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">Stream Out</text>
+      <text x="635" y="134" fill="#6b7a99" font-size="8" text-anchor="middle">WS token stream</text>
+      <text x="635" y="148" fill="#6b7a99" font-size="8" text-anchor="middle">Score update</text>
+      <text x="635" y="162" fill="#6b7a99" font-size="8" text-anchor="middle">Behavioral flags</text>
+      <text x="635" y="178" fill="#ff6b6b" font-size="8" text-anchor="middle">Save → Redis</text>
+
+      <line x1="690" y1="140" x2="720" y2="140" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#da)"/>
+
+      <!-- Step 6 -->
+      <rect x="720" y="80" width="120" height="120" rx="4" fill="#181c23" stroke="#c77dff" stroke-width="1.5"/>
+      <text x="780" y="102" fill="#c77dff" font-size="8" text-anchor="middle">END</text>
+      <text x="780" y="118" fill="#e8edf5" font-size="10" text-anchor="middle" font-weight="500">Feedback</text>
+      <text x="780" y="134" fill="#6b7a99" font-size="8" text-anchor="middle">FeedbackAgent</text>
+      <text x="780" y="148" fill="#6b7a99" font-size="8" text-anchor="middle">Full report</text>
+      <text x="780" y="162" fill="#6b7a99" font-size="8" text-anchor="middle">Export TXT/PDF</text>
+      <text x="780" y="178" fill="#6b7a99" font-size="8" text-anchor="middle">Session cleanup</text>
+
+      <!-- Redis pool at bottom -->
+      <rect x="150" y="230" width="540" height="36" rx="3" fill="#0d1117" stroke="#ff6b6b" stroke-width="0.5" stroke-dasharray="3,2"/>
+      <text x="420" y="248" fill="#ff6b6b" font-size="9" text-anchor="middle">Redis — persistent session state shared across all steps</text>
+      <text x="420" y="262" fill="#6b7a99" font-size="8" text-anchor="middle">Keys: resume · jd · scores · history · phase · qa_log · coding_round · session_id</text>
+
+      <!-- Drop arrows to Redis bar -->
+      <line x1="205" y1="200" x2="205" y2="230" stroke="#ff6b6b" stroke-width="0.5" opacity="0.4" stroke-dasharray="2,2"/>
+      <line x1="345" y1="200" x2="345" y2="230" stroke="#ff6b6b" stroke-width="0.5" opacity="0.4" stroke-dasharray="2,2"/>
+      <line x1="490" y1="200" x2="490" y2="230" stroke="#ff6b6b" stroke-width="0.5" opacity="0.4" stroke-dasharray="2,2"/>
+      <line x1="635" y1="200" x2="635" y2="230" stroke="#ff6b6b" stroke-width="0.5" opacity="0.4" stroke-dasharray="2,2"/>
+    </svg>
+  </div>
+
+  <h3>Session State Schema</h3>
+  <p>The canonical session state object is stored as a Redis hash (serialized JSON) and loaded on each request. Every agent reads from and the orchestrator writes to this shared state.</p>
+
+  <div class="session-state">
+    <div class="ss-item"><div class="ss-key">resume</div><div class="ss-type">str — extracted PDF text</div></div>
+    <div class="ss-item"><div class="ss-key">jd</div><div class="ss-type">str — job description</div></div>
+    <div class="ss-item"><div class="ss-key">selected_role</div><div class="ss-type">str — role profile key</div></div>
+    <div class="ss-item"><div class="ss-key">interview_phase</div><div class="ss-type">str — current phase enum</div></div>
+    <div class="ss-item"><div class="ss-key">question_count</div><div class="ss-type">int — turns elapsed</div></div>
+    <div class="ss-item"><div class="ss-key">current_question</div><div class="ss-type">str — last Q asked</div></div>
+    <div class="ss-item"><div class="ss-key">all_scores</div><div class="ss-type">list[int] — score history</div></div>
+    <div class="ss-item"><div class="ss-key">interview_history</div><div class="ss-type">list[dict] — full log</div></div>
+    <div class="ss-item"><div class="ss-key">qa_log</div><div class="ss-type">list[dict] — Q&A + scores</div></div>
+    <div class="ss-item"><div class="ss-key">edge_cases_detected</div><div class="ss-type">list[str] — off-topic Qs</div></div>
+    <div class="ss-item"><div class="ss-key">red_flags_history</div><div class="ss-type">list[str] — issues</div></div>
+    <div class="ss-item"><div class="ss-key">coding_round</div><div class="ss-type">dict | None — challenge</div></div>
+    <div class="ss-item"><div class="ss-key">retrieval_cache</div><div class="ss-type">dict — semantic cache</div></div>
+    <div class="ss-item"><div class="ss-key">started</div><div class="ss-type">bool — session active</div></div>
+    <div class="ss-item"><div class="ss-key">session_id</div><div class="ss-type">str — UUID key</div></div>
+  </div>
+</div>
+
+<!-- ─── §6 PHASE ENGINE ─── -->
+<div class="section" id="s6">
+  <div class="section-header">
+    <span class="section-num">§ 06</span>
+    <h2>Interview Phase Engine</h2>
+  </div>
+
+  <p>The Interviewer Agent is governed by a <strong>five-phase state machine</strong>. Phase transitions are triggered by <code>question_count</code> thresholds, ensuring a structured progression from rapport-building through technical depth to behavioral exploration and finally to feedback synthesis.</p>
+
+  <div class="phase-timeline">
+    <div class="phase-item">
+      <div class="phase-num">PHASE 0</div>
+      <div class="phase-name">Introduction</div>
+      <div class="phase-qs">Q0</div>
+    </div>
+    <div class="phase-item">
+      <div class="phase-num">PHASE 1</div>
+      <div class="phase-name">Technical</div>
+      <div class="phase-qs">Q1 – Q3</div>
+    </div>
+    <div class="phase-item">
+      <div class="phase-num">PHASE 2</div>
+      <div class="phase-name">Behavioral</div>
+      <div class="phase-qs">Q4 – Q6</div>
+    </div>
+    <div class="phase-item">
+      <div class="phase-num">PHASE 3</div>
+      <div class="phase-name">Deep Dive</div>
+      <div class="phase-qs">Q7 – Q9</div>
+    </div>
+    <div class="phase-item">
+      <div class="phase-num">END</div>
+      <div class="phase-name">Feedback</div>
+      <div class="phase-qs">Q10+</div>
+    </div>
+  </div>
+
+  <p>The Interviewer also adapts <em>within</em> phases based on the Profiler's persona detection. For example, an <code>overconfident</code> persona triggers deeper probing questions in the technical phase, while an <code>anxious</code> persona leads to more reassuring phrasing without reducing question difficulty.</p>
+
+  <div class="callout orange">
+    <strong>Persona Archetypes:</strong> confused · efficient · chatty · edge_case · normal · silent · anxious · overconfident. The Profiler maps each user response to one of these archetypes with a confidence score, which the Interviewer uses to calibrate tone, follow-up depth, and pacing.
+  </div>
+
+  <h3>Context Retrieval via ChromaDB</h3>
+  <p>Before each Interviewer call, the orchestrator performs a semantic similarity search against the session's ChromaDB collection. The collection contains chunked embeddings of the resume, the job description, and all previous Q&A pairs (added dynamically). The top-4 most relevant chunks are injected into the Interviewer's context window as a retrieval augmentation, enabling genuinely resume-aware questions.</p>
+
+  <div class="code-block">
+<span class="cm"># build_retrieval_context() called before each Interviewer turn</span>
+<span class="kw">def</span> <span class="fn">build_retrieval_context</span>(session_id, query, top_k=<span class="num">4</span>):
+    collection = chroma_client.get_collection(f<span class="str">"session_{session_id}"</span>)
+    results = collection.query(
+        query_texts=[query],
+        n_results=top_k,
+        where={<span class="str">"session_id"</span>: session_id}
+    )
+    <span class="kw">return</span> <span class="str">"\n"</span>.join(results[<span class="str">"documents"</span>][<span class="num">0</span>])
+
+<span class="cm"># Injected into Interviewer system prompt as:</span>
+<span class="cm"># "RETRIEVED CONTEXT:\n{retrieval_context}"</span>
+  </div>
+</div>
+
+<!-- ─── §7 SCORING MODEL ─── -->
+<div class="section" id="s7">
+  <div class="section-header">
+    <span class="section-num">§ 07</span>
+    <h2>Evaluation & Scoring Model</h2>
+  </div>
+
+  <p>The Grader Agent applies a <strong>multi-dimensional weighted scoring model</strong> to each candidate response. Each dimension is independently evaluated by the LLM against explicit rubric criteria, then combined into a single 0–100 composite score.</p>
+
+  <table class="score-table">
+    <thead>
+      <tr>
+        <th>Dimension</th>
+        <th>Weight</th>
+        <th>What Is Evaluated</th>
+        <th>Rubric Band</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Technical Accuracy</strong></td>
+        <td>
+          <div class="score-pct">40%</div>
+          <div class="score-bar"><div class="score-bar-fill" style="width:40%"></div></div>
+        </td>
+        <td>Factual correctness, use of correct terminology, absence of misconceptions</td>
+        <td>90–100: Flawless · 70–89: Minor inaccuracies · 50–69: Significant errors · &lt;50: Fundamentally wrong</td>
+      </tr>
+      <tr>
+        <td><strong>Communication</strong></td>
+        <td>
+          <div class="score-pct">25%</div>
+          <div class="score-bar"><div class="score-bar-fill" style="width:25%"></div></div>
+        </td>
+        <td>Clarity, structure, articulation, appropriate depth without verbosity</td>
+        <td>Evaluated as a standalone quality score 0–100</td>
+      </tr>
+      <tr>
+        <td><strong>Problem Solving</strong></td>
+        <td>
+          <div class="score-pct">20%</div>
+          <div class="score-bar"><div class="score-bar-fill" style="width:20%"></div></div>
+        </td>
+        <td>Approach methodology, edge-case consideration, creative alternatives, trade-off reasoning</td>
+        <td>Evaluated as a standalone quality score 0–100</td>
+      </tr>
+      <tr>
+        <td><strong>Relevance</strong></td>
+        <td>
+          <div class="score-pct">15%</div>
+          <div class="score-bar"><div class="score-bar-fill" style="width:15%"></div></div>
+        </td>
+        <td>Answer stays on-topic, directly addresses the question, aligned to role/JD requirements</td>
+        <td>Evaluated as a standalone quality score 0–100</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The Grader also maintains <strong>trend analysis</strong> across the session's <code>all_scores</code> list, detecting performance trajectories (improving, stable, declining) and applying stricter grading standards proportional to the declared seniority of the target role.</p>
+
+  <div class="callout">
+    <strong>Composite Score Formula:</strong> <code>score = 0.40 × technical + 0.25 × communication + 0.20 × problem_solving + 0.15 × relevance</code> — all sub-scores in [0, 100]. The composite drives the real-time analytics chart in the frontend.
+  </div>
+</div>
+
+<!-- ─── §8 SECURITY ─── -->
+<div class="section" id="s8">
+  <div class="section-header">
+    <span class="section-num">§ 08</span>
+    <h2>Security Architecture</h2>
+  </div>
+
+  <p>The system's most distinctive security challenge is the <strong>sandboxed code execution environment</strong> for the coding challenge round. Python's <code>exec()</code> is used with a heavily restricted global namespace, preventing access to system calls, file operations, network access, or dangerous builtins.</p>
+
+  <div class="code-block">
+<span class="cm"># Sandbox: whitelist-only builtins</span>
+safe_globals = {
+    <span class="str">"__builtins__"</span>: {
+        <span class="str">"range"</span>: range, <span class="str">"len"</span>: len, <span class="str">"int"</span>: int,
+        <span class="str">"str"</span>: str, <span class="str">"list"</span>: list, <span class="str">"dict"</span>: dict,
+        <span class="str">"tuple"</span>: tuple, <span class="str">"set"</span>: set, <span class="str">"bool"</span>: bool,
+        <span class="str">"enumerate"</span>: enumerate, <span class="str">"zip"</span>: zip,
+        <span class="str">"map"</span>: map, <span class="str">"filter"</span>: filter,
+        <span class="str">"min"</span>: min, <span class="str">"max"</span>: max,
+        <span class="str">"abs"</span>: abs, <span class="str">"sorted"</span>: sorted,
+    }
+    <span class="cm"># No: open, __import__, exec, eval, os, sys, subprocess</span>
+}
+exec(sanitized_code, safe_globals, {})
+  </div>
+
+  <div class="security-grid">
+    <div class="security-item">
+      <h5>Session Isolation</h5>
+      <p>Each user gets a UUID session_id. Redis keys are namespaced by session_id. ChromaDB collections are per-session. No cross-session data leakage is architecturally possible.</p>
+    </div>
+    <div class="security-item">
+      <h5>File Upload Safety</h5>
+      <p>Only PDF MIME types accepted. File size limits enforced. Files are parsed in-memory and immediately deleted. No user-controlled file paths.</p>
+    </div>
+    <div class="security-item">
+      <h5>Credential Isolation</h5>
+      <p>API keys loaded exclusively from environment variables via python-dotenv. Never hardcoded, never logged, never exposed via API responses.</p>
+    </div>
+    <div class="security-item">
+      <h5>TTL-Based Cleanup</h5>
+      <p>Redis sessions expire after 6 hours (configurable). ChromaDB collections can be pruned on session end. Prevents indefinite PII retention.</p>
+    </div>
+    <div class="security-item">
+      <h5>Input Sanitization</h5>
+      <p>All user inputs are validated before being passed to LLM prompts. Session IDs are validated format. No raw SQL or shell commands anywhere in the codebase.</p>
+    </div>
+    <div class="security-item">
+      <h5>Voice Privacy</h5>
+      <p>Web Speech API processing occurs entirely within the browser. No audio data is transmitted to any server — only the transcribed text string.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ─── §9 SCALABILITY ─── -->
+<div class="section" id="s9">
+  <div class="section-header">
+    <span class="section-num">§ 09</span>
+    <h2>Scalability & Deployment</h2>
+  </div>
+
+  <p>The architecture is designed for horizontal scalability. The application server is stateless per-request — all state lives in Redis. Multiple Flask instances can run behind a load balancer with WebSocket affinity, sharing a Redis cluster and ChromaDB persistence volume.</p>
+
+  <div class="arch-diagram">
+    <svg viewBox="0 0 860 220" xmlns="http://www.w3.org/2000/svg" font-family="IBM Plex Mono, monospace">
+      <defs>
+        <pattern id="grid4" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(255,255,255,0.03)" stroke-width="0.5"/>
+        </pattern>
+        <marker id="as" markerWidth="7" markerHeight="7" refX="5" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L7,3 z" fill="#4f9eff" opacity="0.8"/>
+        </marker>
+      </defs>
+      <rect width="860" height="220" fill="#111318" rx="2"/>
+      <rect width="860" height="220" fill="url(#grid4)" rx="2"/>
+
+      <!-- Clients -->
+      <rect x="20" y="60" width="100" height="100" rx="4" fill="#181c23" stroke="#2a3040" stroke-width="1"/>
+      <text x="70" y="105" fill="#6b7a99" font-size="9" text-anchor="middle">Clients</text>
+      <text x="70" y="120" fill="#e8edf5" font-size="10" text-anchor="middle">N browsers</text>
+
+      <line x1="120" y1="110" x2="160" y2="110" stroke="#4f9eff" stroke-width="1.5" marker-end="url(#as)"/>
+
+      <!-- Load balancer -->
+      <rect x="160" y="70" width="120" height="80" rx="4" fill="#181c23" stroke="#00e5a0" stroke-width="1.5"/>
+      <text x="220" y="100" fill="#00e5a0" font-size="9" text-anchor="middle">Load</text>
+      <text x="220" y="114" fill="#00e5a0" font-size="9" text-anchor="middle">Balancer</text>
+      <text x="220" y="132" fill="#6b7a99" font-size="8" text-anchor="middle">WS affinity</text>
+
+      <!-- 3 Flask instances -->
+      <line x1="280" y1="90" x2="330" y2="60" stroke="#4f9eff" stroke-width="1" marker-end="url(#as)" opacity="0.7"/>
+      <line x1="280" y1="110" x2="330" y2="110" stroke="#4f9eff" stroke-width="1" marker-end="url(#as)" opacity="0.7"/>
+      <line x1="280" y1="130" x2="330" y2="160" stroke="#4f9eff" stroke-width="1" marker-end="url(#as)" opacity="0.7"/>
+
+      <rect x="330" y="32" width="120" height="56" rx="3" fill="#181c23" stroke="#4f9eff" stroke-width="1"/>
+      <text x="390" y="56" fill="#4f9eff" font-size="9" text-anchor="middle">Flask App</text>
+      <text x="390" y="72" fill="#6b7a99" font-size="8" text-anchor="middle">Instance 1</text>
+
+      <rect x="330" y="82" width="120" height="56" rx="3" fill="#181c23" stroke="#4f9eff" stroke-width="2"/>
+      <text x="390" y="106" fill="#4f9eff" font-size="9" text-anchor="middle">Flask App</text>
+      <text x="390" y="122" fill="#6b7a99" font-size="8" text-anchor="middle">Instance 2</text>
+
+      <rect x="330" y="132" width="120" height="56" rx="3" fill="#181c23" stroke="#4f9eff" stroke-width="1"/>
+      <text x="390" y="156" fill="#4f9eff" font-size="9" text-anchor="middle">Flask App</text>
+      <text x="390" y="172" fill="#6b7a99" font-size="8" text-anchor="middle">Instance N</text>
+
+      <!-- Shared stores -->
+      <line x1="450" y1="60" x2="500" y2="80" stroke="#4f9eff" stroke-width="1" opacity="0.5" marker-end="url(#as)"/>
+      <line x1="450" y1="110" x2="500" y2="110" stroke="#4f9eff" stroke-width="1" opacity="0.5" marker-end="url(#as)"/>
+      <line x1="450" y1="160" x2="500" y2="140" stroke="#4f9eff" stroke-width="1" opacity="0.5" marker-end="url(#as)"/>
+
+      <!-- Redis cluster -->
+      <rect x="500" y="40" width="150" height="70" rx="3" fill="#181c23" stroke="#ff6b6b" stroke-width="1.5"/>
+      <text x="575" y="68" fill="#ff6b6b" font-size="10" text-anchor="middle">Redis Cluster</text>
+      <text x="575" y="84" fill="#6b7a99" font-size="8" text-anchor="middle">Shared session state</text>
+      <text x="575" y="97" fill="#6b7a99" font-size="8" text-anchor="middle">All instances read/write</text>
+
+      <!-- ChromaDB cluster -->
+      <rect x="500" y="130" width="150" height="70" rx="3" fill="#181c23" stroke="#c77dff" stroke-width="1.5"/>
+      <text x="575" y="158" fill="#c77dff" font-size="10" text-anchor="middle">ChromaDB</text>
+      <text x="575" y="174" fill="#6b7a99" font-size="8" text-anchor="middle">Shared vector store</text>
+      <text x="575" y="187" fill="#6b7a99" font-size="8" text-anchor="middle">Mounted volume</text>
+
+      <!-- Groq cloud -->
+      <line x1="450" y1="110" x2="690" y2="110" stroke="#4f9eff" stroke-width="1" stroke-dasharray="4,3" opacity="0.4"/>
+      <rect x="690" y="80" width="150" height="60" rx="3" fill="#181c23" stroke="#4f9eff" stroke-width="1" stroke-dasharray="3,2"/>
+      <text x="765" y="104" fill="#4f9eff" font-size="10" text-anchor="middle">Groq Cloud</text>
+      <text x="765" y="120" fill="#6b7a99" font-size="8" text-anchor="middle">External inference</text>
+      <text x="765" y="133" fill="#6b7a99" font-size="8" text-anchor="middle">Per-call, stateless</text>
+    </svg>
+  </div>
+
+  <h3>Environment Variables</h3>
+  <table class="score-table">
+    <thead>
+      <tr><th>Variable</th><th>Required</th><th>Default</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>GROQ_API_KEY</code></td><td style="color:var(--accent3)">Yes</td><td>—</td><td>LLM inference access</td></tr>
+      <tr><td><code>REDIS_URL</code></td><td style="color:var(--accent)">No</td><td>redis://localhost:6379/0</td><td>Session persistence</td></tr>
+      <tr><td><code>SESSION_TTL_SECONDS</code></td><td style="color:var(--accent)">No</td><td>21600 (6h)</td><td>Redis key expiry</td></tr>
+      <tr><td><code>CHROMA_DIR</code></td><td style="color:var(--accent)">No</td><td>./chroma_store</td><td>Vector DB persistence path</td></tr>
+      <tr><td><code>AGENT_WORKERS</code></td><td style="color:var(--accent)">No</td><td>8</td><td>Parallel agent thread pool size</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ─── §10 CONCLUSION ─── -->
+<div class="section" id="s10">
+  <div class="section-header">
+    <span class="section-num">§ 10</span>
+    <h2>Conclusion</h2>
+  </div>
+
+  <p><strong>Insight</strong> demonstrates that a thoughtfully decomposed multi-agent architecture produces qualitatively superior output compared to a single monolithic prompt. By separating behavioral analysis, response grading, question generation, and feedback synthesis into independent agents, each layer can be independently tuned, replaced, or scaled — a property that monolithic systems cannot offer.</p>
+
+  <p>The technology choices compound each other: Groq's inference speed makes streaming feel natural; Redis makes stateless Flask instances horizontally scalable; ChromaDB makes interviews genuinely resume-aware; vanilla JS makes the frontend lean and fast; and the Web Speech API adds voice capability at zero marginal cost.</p>
+
+  <div class="callout green">
+    <strong>Key Architectural Achievements:</strong> Real-time multi-agent orchestration with sub-second perceived latency · Safe Python code execution sandbox · Semantic retrieval-augmented interview personalization · Five-phase adaptive conversation engine · Graceful degradation — zero required infrastructure beyond a Groq API key.
+  </div>
+
+  <h3>Areas for Future Development</h3>
+  <p>The current implementation has several clear extension vectors. A formal test suite (unit tests per agent, integration tests for the orchestration loop) would harden the system for production. Structured logging and observability tooling (Prometheus/Grafana) would improve operational visibility. The feedback generator could be extended with longitudinal tracking — comparing performance across multiple interview sessions for the same user. Finally, multi-language interview support could be achieved by parameterizing the agent system prompts.</p>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  INSIGHT · AI INTERVIEW PRACTICE PARTNER · TECHNICAL ARCHITECTURE REPORT · 2025<br>
+  <span style="opacity:0.4">Flask · Groq · Redis · ChromaDB · Python · WebSocket · Web Speech API</span>
+</div>
+
+</div><!-- /doc -->
+</body>
+</html>
